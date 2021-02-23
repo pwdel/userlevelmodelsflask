@@ -63,9 +63,9 @@ In our most [recently built app](https://github.com/pwdel/postgresloginapiheroku
 
 	├── nginx
 
-	│   ├── Dockerfile
+	│   	├── Dockerfile
 
-	│   └── nginx.conf
+	│   	└── nginx.conf
 
 	└── web
 
@@ -79,17 +79,141 @@ In our most [recently built app](https://github.com/pwdel/postgresloginapiheroku
 
     		├── manage.py
 
+     		├── requirements.txt
+
     		├── project
 
-    		│   ├── __init__.py
+    			├── __init__.py
 
-    		│   └── config.py
+    			├── assets.py
 
-    		└── requirements.txt
+    			├── auth.py
 
+    			├── forms.py
+    			
+    			├── models.py
+
+    			├── routes.py
+
+    			├── config.py
+
+    			└── static
+
+	    			├── /css
+
+	    			├── /dist
+
+	    			├── /img
+
+	    			├── /src
+
+		    			└── js
+
+	    			└── style.css	    			
+    			└── /templates
+
+	    			├── /auth
+
+    					└── login.html
+
+	    			├── /html	    		
+	    				
+	    			├── analytics.jinja2
+
+	    			├── blueprintinfo.jinja2
+
+	    			├── dashboard.jinja2
+
+	    			├── layout.jinja2
+
+	    			├── login.jinja2	    			
+	    			├── navigation.jinja2
+
+    				└── signup.jinja2
 
 ```
 
+We can modify the above structure according to the needs of the new app.
+
+* Each directory can represent a, "microservice."
+* Within each microservice, group related functionality can be created using blueprints. There is both a front end and a backend.
+
+### Analysing Current Blueprints
+
+Looking at our Blueprints currently in service:
+
+A [Blueprint object](https://flask.palletsprojects.com/en/1.1.x/api/#flask.Blueprint) is defined as follows:
+
+```
+class.flask.Blueprint(name, import_name, static_folder=None, static_url_path=None, template_folder=None, url_prefix=None, subdomain=None, url_defaults=None, root_path=None, cli_group=<object object>)
+```
+
+* name – The name of the blueprint. Will be prepended to each endpoint name.
+* import_name – The name of the blueprint package, usually __name__. This helps locate the root_path for the blueprint.
+* static_folder – A folder with static files that should be served by the blueprint’s static route. The path is relative to the blueprint’s root path. Blueprint static files are disabled by default.
+* static_url_path – The url to serve static files from. Defaults to static_folder. If the blueprint does not have a url_prefix, the app’s static route will take precedence, and the blueprint’s static files won’t be accessible.
+* template_folder – A folder with templates that should be added to the app’s template search path. The path is relative to the blueprint’s root path. Blueprint templates are disabled by default. Blueprint templates have a lower precedence than those in the app’s templates folder.
+* url_prefix – A path to prepend to all of the blueprint’s URLs, to make them distinct from the rest of the app’s routes.
+* subdomain – A subdomain that blueprint routes will match on by default.
+* url_defaults – A dict of default values that blueprint routes will receive by default.
+* root_path – By default, the blueprint will automatically this based on import_name. In certain situations this automatic detection can fail, so the path can be specified manually instead.
+
+
+
+#### auth_bp within auth.py
+
+##### Blueprint code:
+
+```
+auth_bp = Blueprint(
+    'auth_bp', __name__,
+    template_folder='templates',
+    static_folder='static'
+)
+```
+##### Breakdown:
+
+* 'auth_bp' is the name
+* __name__ is the import package name which helps identify the root folder.
+* 'templates' is the template folder shown above in our project structure.
+* 'static' is our static folder shown above.
+* There is no tatic_url_path, template_folder, url_prefix, subdomain, url_defaults, root_path, cli_group
+
+##### Usage:
+
+1. Called in __init__.py under create_app(). the auth.auth_bp gets register_blueprint applied.
+2. Route for /signup created with methods, 'GET' and 'POST' - user with name, email, password and website is created and added to database if user not crated yet.
+3. Route for /login created with methods 'GET' and 'POST'. GET serves the login page, while POST requests validation and redirects the user to the dashboard.
+
+
+
+#### main_bp within routes.py
+
+
+
+
+#### home_bp within routes.py
+
+
+## User Experience Perspective
+
+It would be nice if the login experience were as seamless as possible, so that basically any user type can just land on the page and select the user type that they are, and based upon that log in or register.
+
+Below is an example of a two-user account model including doctor and patient.
+
+![Multi User Type Login Example](/readme_img/multiuserexample.png)
+
+In our example, we will need:
+
+* Sponsor
+* Editor
+
+Two additional login profiles at a seperate URL could be maintained, listing:
+
+* Author
+* Admin
+
+These are more for administration of the site and it would not be necessary to display these to the other two user types, who are the main user types.
 
 ## Setting Up New Dockerfile
 
