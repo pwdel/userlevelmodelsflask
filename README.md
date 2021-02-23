@@ -69,23 +69,23 @@ In our most [recently built app](https://github.com/pwdel/postgresloginapiheroku
 
 	└── web
 
-    	├── Dockerfile
+	    	├── Dockerfile
 
-    	├── Dockerfile.prod
+    		├── Dockerfile.prod
 
-    	├── entrypoint.prod.sh
+    		├── entrypoint.prod.sh
 
-    	├── entrypoint.sh
+    		├── entrypoint.sh
 
-    	├── manage.py
+    		├── manage.py
 
-    	├── project
+    		├── project
 
-    	│   ├── __init__.py
+    		│   ├── __init__.py
 
-    	│   └── config.py
+    		│   └── config.py
 
-    	└── requirements.txt
+    		└── requirements.txt
 
 
 ```
