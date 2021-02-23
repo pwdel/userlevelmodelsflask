@@ -42,6 +42,54 @@ We know that flask Blueprints can be used to build different page types, and tha
 
 Flask app code is often written as a tree structure. We can use this to organize how the code will be laid out.
 
+### Starting Tree Structure
+
+In our most [recently built app](https://github.com/pwdel/postgresloginapiherokudockerflask), which included the capability to login with postgres, docker and flask, our tree structure looked like the following:
+
+```
+├── .env.dev
+
+├── .env.prod
+
+├── .env.prod.db
+
+├── .gitignore
+
+├── docker-compose.prod.yml
+
+├── docker-compose.yml
+
+└── services
+
+	├── nginx
+
+	│   ├── Dockerfile
+
+	│   └── nginx.conf
+
+	└── web
+
+    	├── Dockerfile
+
+    	├── Dockerfile.prod
+
+    	├── entrypoint.prod.sh
+
+    	├── entrypoint.sh
+
+    	├── manage.py
+
+    	├── project
+
+    	│   ├── __init__.py
+
+    	│   └── config.py
+
+    	└── requirements.txt
+
+
+```
+
 
 ## Setting Up New Dockerfile
 
@@ -53,7 +101,7 @@ Our previous project had a dockerfile built which launched an application called
 
 ## References
 
-[](https://charlesleifer.com/blog/how-to-make-a-flask-blog-in-one-hour-or-less/)
+[How to Make a Flask Blog in One Hour or Less](https://charlesleifer.com/blog/how-to-make-a-flask-blog-in-one-hour-or-less/)
 [Flask Markdown Editor Plugin](https://pypi.org/project/Flask-MDEditor/)
 [Example Creation of Table Data - Cars](https://stackabuse.com/using-sqlalchemy-with-flask-and-postgresql/)
 [Proper way to handle two different types of user session in one app in flask](https://stackoverflow.com/questions/33575918/proper-way-to-handle-two-different-types-of-user-session-in-one-app-in-flask)
