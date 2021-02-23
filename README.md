@@ -27,16 +27,13 @@ The flow is as follows:
 4. Build Relationships Between Documents and Users.
 5. Build "Messaging" Protocol which .includes saves and submits and requests back and fourth.
 
-## Getting Started
+## Getting Started - Reviewing Past Code
 
 We have previous work already done having built a [Flask App on Docker for Heroku with Postgres and Login Capability].(https://github.com/pwdel/postgresloginapiherokudockerflask).
 
 However, this app only included one user type and one main type of Blueprint for that user for login.
 
 We know that flask Blueprints can be used to build different page types, and that within those page types, logic can be built which stipulates whether a user can view them or not. It would seem reasonable to believe that Blueprints could also be used to determine whether certain types of users could log in to certain types of pages.
-
-## Visual Layout
-
 
 ## Structuring Code
 
@@ -158,8 +155,6 @@ class.flask.Blueprint(name, import_name, static_folder=None, static_url_path=Non
 * url_defaults – A dict of default values that blueprint routes will receive by default.
 * root_path – By default, the blueprint will automatically this based on import_name. In certain situations this automatic detection can fail, so the path can be specified manually instead.
 
-
-
 #### auth_bp within auth.py
 
 ##### Blueprint code:
@@ -186,13 +181,117 @@ auth_bp = Blueprint(
 3. Route for /login created with methods 'GET' and 'POST'. GET serves the login page, while POST requests validation and redirects the user to the dashboard.
 
 
-
 #### main_bp within routes.py
 
+##### Blueprint Code
 
+```
+main_bp = Blueprint(
+    'main_bp', __name__,
+    template_folder='templates',
+    static_folder='static'
+)
+```
 
+##### Breakdown
+
+Same as auth_bp above.
+
+##### Usage
+
+1. routes.main_bp registered with register_blueprint in __init__.py
+2. @main_bp called at / with method 'GET', condition @login_required.
+3. dashboard() function renders template 'dashboard.jinja2'
+4. Various variables get fed in to this template.
+5. There is also a /logout which redirects the user back to auth_bp.login
 
 #### home_bp within routes.py
+
+I actually skipped using this one, in the interests of speeding things up. This would have been used to show a bunch of products on the page. We can eliminate all of this fluff as we are starting over.
+
+### Discussion on What Blueprints Do and Don't
+
+#### What Blueprints Do:
+
+1. They get "registered" at app initialization.
+2. They get, "configured" within a python function which includes the Blueprints module.
+3. This configuration points to the templates folder, static folder, and other options. Basically it points to the structure of where things are located.
+4. They can also include url prefixes, domains and custom static folders.
+5. They get called by [route](https://flask.palletsprojects.com/en/1.1.x/api/#flask.Flask.route) to a particular URL string, for example, '/', they route the user to a path to templates described by the blueprint.
+
+#### What Blueprints Don't:
+
+1. Create login forms, which is covered by an entirely different module, flask_wtf. They don't validate emails either.
+2. Create user models, which is covered with flask_login and UserMixin. They don't generate and check password hashes either, which is covered by wrkzeug.security.
+3. Compile or hold assets such as css, js. This is done via flask_assets module Bundle.
+
+### Rendering Templates
+
+[render_template](https://flask.palletsprojects.com/en/1.1.x/api/#flask.render_template) is a fundamental part of Flask which allows jinja templates to be rendered and built into sites.  It's fairly simple, render_template is broken down as follows:
+
+flask.render_template(template_name_or_list,context) 
+
+* template_name_or_list – the name of the template to be rendered, or an iterable with template names the first one existing will be rendered
+* context – the variables that should be available in the context of the template.
+
+So you basically call out the template name and then all of the variables which feed into that template.
+
+### Routes
+
+The routes are described by [route](https://flask.palletsprojects.com/en/1.1.x/api/#flask.Flask.route) which is described as follows:
+
+route(rule, options)
+
+* rule – the URL rule as string
+* endpoint – the endpoint for the registered URL rule. Flask itself assumes the name of the view function as endpoint
+* options – the options to be forwarded to the underlying Rule object. A change to Werkzeug is handling of method options. methods is a list of methods this rule should be limited to (GET, POST etc.). By default a rule just listens for GET (and implicitly HEAD). Starting with Flask 0.6, OPTIONS is implicitly added and handled by the standard request handling.
+
+Important to note here is that the rules abide by [URL Route Registrations](https://flask.palletsprojects.com/en/1.1.x/api/#url-route-registrations).
+
+There is an underlying Werkzeug routing system.
+
+* Variable parts in the route can be specified with angular brackets such as /user/<username>/.
+
+* Also note Flask takes away trailing / by default.
+* You can create different rules for routes and URLs that get displayed.
+* By default, a rule listens for 'GET' but we can supply POST and other restful API options to specify those. By default, all HTTP calls are allowed.
+
+This is described under [werkzeug documentation](https://werkzeug.palletsprojects.com/en/1.0.x/routing/#werkzeug.routing.Rule).
+
+#### Werkzeug
+
+class werkzeug.routing.Rule(string, defaults=None, subdomain=None, methods=None, build_only=False, endpoint=None, strict_slashes=None, merge_slashes=None, redirect_to=None, alias=False, host=None, websocket=False)
+
+[Documentation for Werkzeug](https://werkzeug.palletsprojects.com/en/1.0.x/routing/#werkzeug.routing.Rule)
+
+### HTTP Methods
+
+As a refresher on HTTP Methods:
+
+
+* GET - is used to request data from a specified resource. Should not be used for sensitive data, stays in the cache.
+* POST - is used to send data to the server. Never cached, does not remain in the browser history.
+* PUT - Same as POST, however calling the PUT request multiple times will always produce the same result. Calling POST multiple times will create the same resource multiple times. If you name the URL explicitly, use PUT. If we let the server decide, use POST. Use PUT when possible. Basically you overwrite an existing resource with PUT, so if you don't need to create new things, use PUT.
+* DELETE - Obviously, delete the resource.
+* HEAD - Same as GET but with just the HEAD, no body.
+
+[More of a reference guide](https://www.w3schools.com/tags/ref_httpmethods.asp)
+
+So specifying, 'GET' and 'POST' above was because we didn't want to specify 'PUT' which would have over-written a resource.
+
+
+### Templates
+
+The templating we use within Flask is Jinja, [the documentation for which can be found here](https://jinja.palletsprojects.com/en/2.11.x/api/#basics).
+
+
+
+
+
+## Going Forward
+
+1. We need to add new user models to models.py.
+2. We need to create new blueprints, templates and routes to send the various users to the right places after their signin.
 
 
 ## User Experience Perspective
