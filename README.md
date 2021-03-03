@@ -106,7 +106,7 @@ class User(UserMixin, db.Model):
 
 Duplicating this database within DBDesigner.net, we get the following:
 
-![Initial Database](/img/initialdatabase.png)
+![Initial Database](/readme_img/initialdatabase.png)
 
 
 ## Structuring Code
