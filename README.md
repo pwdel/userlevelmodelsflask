@@ -37,76 +37,7 @@ We know that flask Blueprints can be used to build different page types, and tha
 
 ## Visual Layout
 
-* In designing the app itself, I can use Balsamiq, which I have been able to download and use on Lubuntu.
-* For architecting the database design, I decided to try out [System Architect v5.0.0 Alpha](https://www.codebydesign.com/index.php/downloads/system-architect-v5-0-0-alpha-3/).
-* Another option that I could try out if this does not work well is [Kexi](http://www.kexi-project.org/wiki/wikiview/index.php@KexiFeatures.html#Features)
 
-There are other tool recommendations given on the [Postgres wiki](https://wiki.postgresql.org/wiki/Design_Tools#Open_Source_.28Free.29).
-
-Starting off, I attempetd to install System Architect 5 (SArch5).
-
-However, this did not work, so I pivoted to attempting to use [Umbrello](https://snapcraft.io/umbrello).
-
-There is also a web version of a [database designer](https://app.dbdesigner.net/dashboard) which I was able to log into with a Google account.
-
-### Modeling Current User Database
-
-To start off with, we can simply copy the table and database that we already have in place within our [postgresflask app](https://github.com/pwdel/postgresloginapiherokudockerflask/blob/main/services/web/project/models.py). 
-
-Here we created at db.Model using [UserMixin](https://flask-login.readthedocs.io/en/latest/#flask_login.UserMixin) from the flask-login module.
-
-UserMixin(object) provides default implementations for methods that flask-login expects users to have.
-
-Our code looked as follows:
-
-```
-class User(UserMixin, db.Model):
-    """User account model."""
-
-    __tablename__ = 'flasklogin-users'
-    id = db.Column(
-        db.Integer,
-        primary_key=True
-    )
-    name = db.Column(
-        db.String(100),
-        nullable=False,
-        unique=False
-    )
-    email = db.Column(
-        db.String(40),
-        unique=True,
-        nullable=False
-    )
-    password = db.Column(
-        db.String(200),
-        primary_key=False,
-        unique=False,
-        nullable=False
-	)
-    website = db.Column(
-        db.String(60),
-        index=False,
-        unique=False,
-        nullable=True
-	)
-    created_on = db.Column(
-        db.DateTime,
-        index=False,
-        unique=False,
-        nullable=True
-    )
-    last_login = db.Column(
-        db.DateTime,
-        index=False,
-        unique=False,
-        nullable=True
-    )
-```
-
-Duplicating this database within DBDesigner.net, we get the following:
-
-![Initial Database](/readme_img/initialdatabase.png)
 
 
 ## Structuring Code
@@ -358,8 +289,7 @@ So specifying, 'GET' and 'POST' above was because we didn't want to specify 'PUT
 
 The templating we use within Flask is Jinja, [the documentation for which can be found here](https://jinja.palletsprojects.com/en/2.11.x/api/#basics).
 
-
-
+There is also parent-child templating within Jinja. 
 
 
 ## Going Forward
@@ -394,6 +324,281 @@ These are more for administration of the site and it would not be necessary to d
 Our previous project had a dockerfile built which launched an application called, "hello_flask."  We should probably pick a different name in the case that we want to run this app simultaneously on the same machine - same goes for the database name, which has been db.
 
 ## User Model for Different Users
+
+
+* In designing the app itself, I can use Balsamiq, which I have been able to download and use on Lubuntu.
+* For architecting the database design, I decided to try out [System Architect v5.0.0 Alpha](https://www.codebydesign.com/index.php/downloads/system-architect-v5-0-0-alpha-3/).
+* Another option that I could try out if this does not work well is [Kexi](http://www.kexi-project.org/wiki/wikiview/index.php@KexiFeatures.html#Features)
+
+There are other tool recommendations given on the [Postgres wiki](https://wiki.postgresql.org/wiki/Design_Tools#Open_Source_.28Free.29).
+
+Starting off, I attempetd to install System Architect 5 (SArch5).
+
+However, this did not work, so I pivoted to attempting to use [Umbrello](https://snapcraft.io/umbrello).
+
+There is also a web version of a [database designer](https://app.dbdesigner.net/dashboard) which I was able to log into with a Google account.
+
+### Modeling Current User Database
+
+To start off with, we can simply copy the table and database that we already have in place within our [postgresflask app](https://github.com/pwdel/postgresloginapiherokudockerflask/blob/main/services/web/project/models.py). 
+
+Here we created at db.Model using [UserMixin](https://flask-login.readthedocs.io/en/latest/#flask_login.UserMixin) from the flask-login module.
+
+UserMixin(object) provides default implementations for methods that flask-login expects users to have.
+
+Our code looked as follows:
+
+```
+class User(UserMixin, db.Model):
+    """User account model."""
+
+    __tablename__ = 'flasklogin-users'
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+    name = db.Column(
+        db.String(100),
+        nullable=False,
+        unique=False
+    )
+    email = db.Column(
+        db.String(40),
+        unique=True,
+        nullable=False
+    )
+    password = db.Column(
+        db.String(200),
+        primary_key=False,
+        unique=False,
+        nullable=False
+	)
+    website = db.Column(
+        db.String(60),
+        index=False,
+        unique=False,
+        nullable=True
+	)
+    created_on = db.Column(
+        db.DateTime,
+        index=False,
+        unique=False,
+        nullable=True
+    )
+    last_login = db.Column(
+        db.DateTime,
+        index=False,
+        unique=False,
+        nullable=True
+    )
+```
+
+Duplicating this database within DBDesigner.net, we get the following:
+
+![Initial Database](/readme_img/initialdatabase.png)
+
+### Creating Multiple User Types
+
+We need the following user types, in order of importance:
+
+* Sponsor
+* Editor
+* Admin
+* Author
+
+#### Sponsors, Authors and Editors
+
+The sponsor account has a dashboard which gives them the ability to insert or generate an article that they would like to have edited, as well as some information about editors.
+
+Basically, sponsors have:
+
+* id
+* name
+* email
+* organization
+* password
+* user_type
+* created_on
+
+We don't really need a website link, so we can take that out.
+
+Editors basically have the same properties as above.  So the table, "Users" can basically be used for these different basic user types.
+
+#### Admins
+
+We could create a completely seperate administration table for future use, just to eliminate any possibility of basic users being accidentally classified as Admins.
+
+#### Authors
+
+As mentioned above, authors could be the same as Sponsors and Editors in terms of the table, but could have a seperate classification. If they are, "hidden" from the main screen, that is something we can put into the software rather than the database.
+
+#### Creating Documents
+
+Assuming we are working with some kind of shared set of documents between Sponsors and Editors, we can start off by creating extremely simple documents, the body of which goes right in the database, with a limited number of characters that can display.
+
+We could allow sponsors to pick the editor that should be assigned to a document using a dropdown list of some type.
+
+After working around and creating a schema, we get the following:
+
+![](/readme_img/newdatabase.png)
+
+With this we can create code for a new model within models.py.
+
+Interestingly, in our database creator app, we can actually generate and export SQL, as shown below:
+
+```
+CREATE TABLE "users" (
+	"id" integer NOT NULL,
+	"name" VARCHAR(255) NOT NULL,
+	"email" VARCHAR(40) NOT NULL UNIQUE,
+	"password" VARCHAR(200) NOT NULL,
+	"organization" VARCHAR(60),
+	"created_on" DATETIME(60),
+	"last_login" DATETIME(60),
+	CONSTRAINT "users_pk" PRIMARY KEY ("id")
+) WITH (
+  OIDS=FALSE
+);
+
+
+
+CREATE TABLE "documents" (
+	"id" integer NOT NULL,
+	"document_name" VARCHAR(255) NOT NULL,
+	"created_on" DATETIME(60),
+	"sponsor_id" integer NOT NULL,
+	"editor_id" integer,
+	"body" VARCHAR(1000),
+	CONSTRAINT "documents_pk" PRIMARY KEY ("id")
+) WITH (
+  OIDS=FALSE
+);
+
+
+
+
+ALTER TABLE "documents" ADD CONSTRAINT "documents_fk0" FOREIGN KEY ("sponsor_id") REFERENCES "users"("id");
+ALTER TABLE "documents" ADD CONSTRAINT "documents_fk1" FOREIGN KEY ("editor_id") REFERENCES "users"("id");
+
+```
+
+The above is a useful printout over the relational database as it shows precisely what properties each column of each table has.
+
+
+### Translating Into Our Data Model
+
+#### Users Model, or flasklogin-users
+
+The way the model is declared is through [flask-sqlalchemy](https://flask-sqlalchemy.palletsprojects.com/en/2.x/models/) - declaring models.
+
+Some differences:
+
+* The varchar type
+* [Relationships](https://docs.sqlalchemy.org/en/14/orm/relationship_api.html#sqlalchemy.orm.relationship)
+* [ForeignKey](https://docs.sqlalchemy.org/en/14/core/constraints.html#sqlalchemy.schema.ForeignKey)
+
+[List of variable types are here](https://docs.sqlalchemy.org/en/14/core/type_basics.html).
+
+
+```
+class User(UserMixin, db.Model):
+    """User account model."""
+
+    __tablename__ = 'flasklogin-users'
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+    name = db.Column(
+        db.String(100),
+        unique=False,
+        nullable=False
+    )
+    user_type = db.Column(
+        db.String(40),
+        unique=False,
+        nullable=False
+    )    
+    email = db.Column(
+        db.String(40),
+        unique=True,
+        nullable=False
+    )
+    password = db.Column(
+        db.String(200),
+        primary_key=False,
+        unique=False,
+        nullable=False
+	)
+    organization = db.Column(
+        db.String(60),
+        index=False,
+        unique=False,
+        nullable=True
+	)
+    created_on = db.Column(
+        db.DateTime,
+        index=False,
+        unique=False,
+        nullable=True
+    )
+    last_login = db.Column(
+        db.DateTime,
+        index=False,
+        unique=False,
+        nullable=True
+    )
+```
+
+
+
+#### Document Model
+
+One Document is tied to, "many" users, meaning it gets tied to both a sponsor and an editor.  Hence, the relationship key, sponsor_id and editor_id.
+
+However, one sponsor and one editor may have, "many" documents as well, so this design
+ will follow the SQLAlchemy [Many-to-Many relationship paradigm](https://flask-sqlalchemy.palletsprojects.com/en/2.x/models/#many-to-many-relationships).
+
+
+
+```
+class Documents(db.Model):
+    """Docu account model."""
+
+    __tablename__ = 'documents'
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+    document_name = db.Column(
+        db.String(100),
+        unique=True,
+        nullable=False
+    )
+    sponsor_id = db.Column(
+        db.Integer,
+        unique=False,
+        nullable=False
+    )
+    document_name = db.Column(
+        db.String(100),
+        unique=False,
+        nullable=False
+    )
+    body = db.Column(
+        db.String(1000),
+        unique=False,
+        nullable=False
+    )
+    created_on = db.Column(
+        db.DateTime,
+        index=False,
+        unique=False,
+        nullable=True
+    )
+```
+
+## Creating the Forms
 
 ## Dashboards for Different Users
 
