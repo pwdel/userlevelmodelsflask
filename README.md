@@ -575,16 +575,6 @@ class Documents(db.Model):
         unique=True,
         nullable=False
     )
-    sponsor_id = db.Column(
-        db.Integer,
-        unique=False,
-        nullable=False
-    )
-    document_name = db.Column(
-        db.String(100),
-        unique=False,
-        nullable=False
-    )
     body = db.Column(
         db.String(1000),
         unique=False,
@@ -598,15 +588,246 @@ class Documents(db.Model):
     )
 ```
 
+### Helper Table (Or Association Table)
+
+When creating many-to-many relationships, we have to create an association table to connect the two tables to each other.
+
+We have multiple Users which can be attached to multiple Documents and vice versa.
+
+What is the relationship between Users and Documents?  Thinking about a word that describes this relationship would be helpful in naming the table.
+
+For example, with Products and People, the relationship is an Order.  The relationship between a User and a Document is probably more of a, "Hold" than an, "Ownership."  Ownership implies control, something that only Sponsor Users would have, but not Editors. Other synonyms:
+
+* Ownership
+* Holding
+* Occupancy
+* Grip
+* Possess
+* Retain
+* Carry
+* Control
+* Maintain
+
+Of the above, Users in general Retain Documents or Carry Documents without controlling them. So, we could call the association table, "Retentions," or "Holdings."  Holdings sounds more common, so we will go with that.
+
+
+For the association table, we have to make sure to import to allow relationships:
+
+```
+
+from sqlalchemy.orm import relationship, backref
+```
+
+The 'retentions' table includes:
+
+* id (Primary Key)
+* sponsor_id
+* editor_id (allow nulls)
+* date_created
+
+Every document must have a sponsor, but it doesn't have to have an editor. The editor may be switched.
+
+
+```
+class Retentions('retentions')
+	__tablename__ = 'retentions'
+
+    id = db.Column(
+    	db.Integer, 
+    	primary_key=True
+    )
+
+    sponsor_id = db.Column(
+    	db.Integer, 
+    	db.ForeignKey('users.id')
+        unique=False,
+        nullable=False
+    )
+
+	editor_id = db.Column(
+		db.Integer, 
+		db.ForeignKey('users.id')
+        unique=False,
+        nullable=True
+	)
+
+    document_id = db.Column(
+    	db.Integer, 
+    	db.ForeignKey('products.id')
+    	unique=False,
+        nullable=False
+    )
+
+    created_on = db.Column(
+        db.DateTime,
+        index=False,
+        unique=False,
+        nullable=True
+    )
+
+    user = relationship(User, backref=backref("retentions", cascade="all, delete-orphan"))
+
+    document = relationship(Document, backref=backref("retentions", cascade="all, delete-orphan"))
+
+```
+
+#### Relatinoship Descriptions in SQLAlchemy
+
+Within SQLAlchemy, there is a way to describe the relationships between different tables which is defined within the user model classes.
+
+Within our Retentions class, we add the following to define the backreferences between the tables:
+
+```
+    user = relationship(User, backref=backref("retentions", cascade="all, delete-orphan"))
+
+    document = relationship(Document, backref=backref("retentions", cascade="all, delete-orphan"))
+```
+
+Note the capitalization of 'User' and 'Document' referring to the class which defines the table. note "retentions" in the back-reference referring to the 'retentions' table.
+
+The SQLAlchemy [relationship](https://docs.sqlalchemy.org/en/13/orm/relationships.html) documentation referrs to a [Many to Many](https://docs.sqlalchemy.org/en/13/orm/basic_relationships.html#many-to-many) relationship. 
+
+[relationship()](https://docs.sqlalchemy.org/en/13/orm/relationship_api.html#sqlalchemy.orm.relationship) provides the relationship between two mapped classes. There are all sorts of default options within the relationship() function.
+
+We then have to create relationship pointers in each of the other classes for User and Document, pointing go this Retentions table.
+
+##### Relationship for Users and Documents
+
+Within the "Document" class we put:
+
+```
+users = relationship('User', secondary='retentions', back_populates='documents')
+```
+
+* "secondary" points to the associaton table, 'retentions' which then points to the User class.  This gets defined as the 'users' variable within our Documents class.
+* We use, "[back_populates](https://docs.sqlalchemy.org/en/13/orm/relationship_api.html#sqlalchemy.orm.relationship.params.back_populates)" to ensure proper functionality, the same as [backref](https://docs.sqlalchemy.org/en/13/orm/relationship_api.html#sqlalchemy.orm.relationship.params.backref) which Indicates the string name of a property to be placed on the related mapper’s class that will handle this relationship in the other direction. The other property will be created automatically when the mappers are configured. Can also be passed as a backref() object to control the configuration of the new relationship.
+* We may not need this as it states that, "the other property will be automatically configured."
+
+and...within the "User" class we put:
+
+```
+documents = relationship("Document", secondary="retentions", 
+back_populates='users')
+```
+
+* "secondary" points to the associaton table, which then points to the User.
+
+* Note the capitalized, "Document" referring to the class which defines the table. "retentions" is lower case, pointing to the table of that name.
+
+##### Summary of Relationships
+
+Relatinoships Table
+
+* The class for the association table, 'Retentions' has two variables, pointing to documents and users. 
+* It also has column sponsor_id which maps to a users.id which can't be blank.
+* It has column product_id which maps to a users.id which can be blank initially.
+* It has a document_id which points to the document, which can't be blank.
+
+Documents 
+
+* We point out users with a variable, pointing to the retentions database and back populate to 'documents'
+
+Users
+
+* We point out documents with a variable, pointing to th retentions database and back populate to 'users'.
+
+### Finalized Design
+
+![Final Database Design](/readme_img/finaldatabase.png)
+
+## Logic
+
+### Creating Users
+
+Originally, our User class was called in the Auth.py function, as simple authentication, as summarized below.
+
+Going forward, we will need to create two different login pages, one for each type of user. For the purposes of this app, which is a demonstration, we may need to simply create the users at-will with no approval.
+
+#### Auth.py
+
+* in [auth.py](https://github.com/pwdel/postgresloginapiherokudockerflask/blob/main/services/web/project/auth.py) it was imported "from .models import User"
+* within a form, using validation_on_submit
+* User name, email, website, password was inserted in the form.
+* After the user was created, a template was rendered.
+* There was also authentication logic, querying for user existence and checking password.
+
+* Users were not called in assets.py, which is more about static assets.
+* Users were not called in forms.py, but this file was used to create forms that would be used in auth.py.
+* Users were not called in routes.py, other than [current_user](https://flask-login.readthedocs.io/en/latest/#flask_login.current_user) which is a built-in function for flask-login.
+* Users were not called in routes.py, which is more about blueprints.
+
+#### Creating, Editing and Deleting Documents
+
+Creating documents appears to call for a completely new set of logic.
+
+If we look at this [Flask Blog Example Github Source Code](https://github.com/gouthambs/Flask-Blogging), we see that they have things architected as follows:
+
+##### Flask-Blogging Rough Outline
+
+* Blogging Engine Module (handles the blog storage, configuration, permissions, extension, configuration, user loaders, and calls other functions.)
+* Has a Post Processor (handles markdown extensions)
+* Uses SQLAStorage
+* Stores data in Google Cloud
+
+Basically, it isn't well-organized and there is not a lot of documentation regarding how it should be organized.
+
+However, the convention they seem to use is put a lot of processes into, "Blogging Engine."  We could likewise, create an, "Engine" however we might just call it a, "DocumentEngine," within engine.py.
+
 ## Creating the Forms
+
+In order to know what forms are needed, I needed a basic layout of the software, so [I created one in Balsamiq](/balsamiq/layout.bmpr).
+
+From that, I created the following generalized layout:
+
+![](/readme_img/LoginPage.png)
+
+![](/readme_img/SponsorSignup.png)
+
+![](/readme_img/SponsorDashboard.png)
+
+![](/readme_img/SponsorDashboard.png)
+
+![](/readme_img/SponsorDocuments.png)
+
+![](/readme_img/SponsorEditAssign.png)
+
+![](/readme_img/SponsorNewDocument.png)
+
+![](/readme_img/EditorSignupPage.png)
+
+![](/readme_img/EditorDocuments.png)
+
+![](/readme_img/EditorEditAssign.png)
 
 ## Dashboards for Different Users
 
+## Future References
+
+* We may want to create different tables for different types of users rather than keep the users all in the same table. This is a philosophical design problem. Basically this design problem is based upon whether sponsors and editors may ever change their type, e.g. whether editors may ever be promoted to sponsors. If this is a customer/vendor relationship, then there may never or very infrequently a need to switch user type back and fourth. However if this is a blog writing application, with a group or team of relatively equal types of people who can perform different roles over time, it may be better to keep them in the same table.
+* Having an additional user class, basically an administrator, which would be able to change, "trial accounts" who can only see the software into, "sponsor accounts" who can have access to the software, will be fairly critical.  Basically if this is a paid service, or even if it's a non-paid service, there needs to be some kind of administrative user management.
+* Further, creating pools, teams or groups of eligibility for use together might be something else fairly universal. Essentially, particularly with larger applications, you may have one or a small team of editors who may be assigned to a sponsor (which could also be considered an author).  There may also be different sponsor accounts. The ability to create different types of relationship tables dynamically will be extremely helpful in this scenario.
+* Resources may also be an important thing to create - basically giving a sponsor or privleged account access to a resource, which might be a part of a microservice, even possibly in a different container, may become important in the future.
+
 ## References
 
+[Flask Blog Example Github Source Code](https://github.com/gouthambs/Flask-Blogging)
+
+[Building a Many to Many Relationship - SQLAlchemy](https://docs.sqlalchemy.org/en/13/orm/tutorial.html#building-a-many-to-many-relationship)
+
+[Database Design - User Types](https://stackoverflow.com/questions/8479252/database-design-3-types-of-users-separate-or-one-table)
+
+[BaseModel in Flask](https://dev.to/chidioguejiofor/making-sqlalchemy-models-simpler-by-creating-a-basemodel-3m9c)
+
+[Many to Many Relationships in SQAlchemy](https://www.michaelcho.me/article/many-to-many-relationships-in-sqlalchemy-models-flask)
+
 [How to Make a Flask Blog in One Hour or Less](https://charlesleifer.com/blog/how-to-make-a-flask-blog-in-one-hour-or-less/)
+
 [Flask Markdown Editor Plugin](https://pypi.org/project/Flask-MDEditor/)
+
 [Example Creation of Table Data - Cars](https://stackabuse.com/using-sqlalchemy-with-flask-and-postgresql/)
+
 [Proper way to handle two different types of user session in one app in flask](https://stackoverflow.com/questions/33575918/proper-way-to-handle-two-different-types-of-user-session-in-one-app-in-flask)
+
 [Stack Overflow: Implementing Flask Login with Multiple User Classes](https://stackoverflow.com/questions/15871391/implementing-flask-login-with-multiple-user-classes)
+
 [Using Flask Blueprint to Architect Your Applications](https://realpython.com/flask-blueprint/)
