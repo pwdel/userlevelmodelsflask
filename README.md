@@ -785,8 +785,6 @@ From that, I created the following generalized layout:
 
 ![](/readme_img/SponsorDashboard.png)
 
-![](/readme_img/SponsorDashboard.png)
-
 ![](/readme_img/SponsorDocuments.png)
 
 ![](/readme_img/SponsorEditAssign.png)
@@ -799,14 +797,19 @@ From that, I created the following generalized layout:
 
 ![](/readme_img/EditorEditAssign.png)
 
-## Dashboards for Different Users
+## Pages and Blueprints for Different User Types
 
-## Future References
+Above, we created a layout which helps us understand what kinds of users have what kinds of dashboards. We can start out with the, "Signup" functionality which now has one type of user, and create a setup which will allow links to two different types of users.
+
+### 
+
+## Future Work
 
 * We may want to create different tables for different types of users rather than keep the users all in the same table. This is a philosophical design problem. Basically this design problem is based upon whether sponsors and editors may ever change their type, e.g. whether editors may ever be promoted to sponsors. If this is a customer/vendor relationship, then there may never or very infrequently a need to switch user type back and fourth. However if this is a blog writing application, with a group or team of relatively equal types of people who can perform different roles over time, it may be better to keep them in the same table.
 * Having an additional user class, basically an administrator, which would be able to change, "trial accounts" who can only see the software into, "sponsor accounts" who can have access to the software, will be fairly critical.  Basically if this is a paid service, or even if it's a non-paid service, there needs to be some kind of administrative user management.
 * Further, creating pools, teams or groups of eligibility for use together might be something else fairly universal. Essentially, particularly with larger applications, you may have one or a small team of editors who may be assigned to a sponsor (which could also be considered an author).  There may also be different sponsor accounts. The ability to create different types of relationship tables dynamically will be extremely helpful in this scenario.
 * Resources may also be an important thing to create - basically giving a sponsor or privleged account access to a resource, which might be a part of a microservice, even possibly in a different container, may become important in the future.
+* Error prevention and UX considerations are extremely minimal in this application. There are lots of easy to fix, low hanging fruit here.
 
 ## References
 
