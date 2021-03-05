@@ -797,11 +797,21 @@ From that, I created the following generalized layout:
 
 ![](/readme_img/EditorEditAssign.png)
 
+## Logical Flows
+
+To create the logic behind what user can see which dashboard, I used [Lucid online flowcharts](https://lucid.app/documents#/dashboard).
+
+![](/readme_img/logical.png)
+
 ## Pages and Blueprints for Different User Types
 
 Above, we created a layout which helps us understand what kinds of users have what kinds of dashboards. We can start out with the, "Signup" functionality which now has one type of user, and create a setup which will allow links to two different types of users.
 
-### 
+### Changing the Login Page
+
+* The first thing that needs to be done on the login page, is simply to create buttons which link off to different types of signup pages.
+
+
 
 ## Future Work
 
