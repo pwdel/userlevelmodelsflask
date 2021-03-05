@@ -1102,6 +1102,71 @@ So, we ran in detached mode with:
 sudo docker-compose up -d --build
 ```
 
+We now have a perpetually running app on localhost.  However, we need to be able to log into bash and inxpect the database, so we use:
+
+```
+sudo docker run --rm -it userlevels_flask bash
+```
+From within the root docker container, we get:
+
+```
+root@af424625f527:/usr/src/app# 
+
+```
+
+From the command line, we can log into the database with (using our new database name):
+
+```
+sudo docker-compose exec db psql --username=userlevels_flask --dbname=userlevels_flask_dev
+```
+Checking for a list of databases:
+
+```
+userlevels_flask_dev=# \l                                                                                                                                  
+                                                  List of databases                                                                                        
+         Name         |      Owner       | Encoding |  Collate   |   Ctype    |           Access privileges                                                
+----------------------+------------------+----------+------------+------------+---------------------------------------                                     
+ postgres             | userlevels_flask | UTF8     | en_US.utf8 | en_US.utf8 |                                                                            
+ template0            | userlevels_flask | UTF8     | en_US.utf8 | en_US.utf8 | =c/userlevels_flask                  +                                     
+                      |                  |          |            |            | userlevels_flask=CTc/userlevels_flask                                      
+ template1            | userlevels_flask | UTF8     | en_US.utf8 | en_US.utf8 | =c/userlevels_flask                  +                                     
+                      |                  |          |            |            | userlevels_flask=CTc/userlevels_flask                                      
+ userlevels_flask_dev | userlevels_flask | UTF8     | en_US.utf8 | en_US.utf8 |                                         
+
+```
+
+
+Checking for a list of relations:
+
+```
+userlevels_flask_dev=# \dt                                                                                                                                 
+                  List of relations                                                                                                                        
+ Schema |       Name       | Type  |      Owner                                                                                                            
+--------+------------------+-------+------------------                                                                                                     
+ public | documents        | table | userlevels_flask                                                                                                      
+ public | flasklogin-users | table | userlevels_flask                                                                                                      
+ public | retentions       | table | userlevels_flask                                                                                                      
+ public | users            | table | userlevels_flask 
+```
+We can look at the database by connecting to it, and then selecting * from users.
+
+```
+userlevels_flask_dev=# \c userlevels_flask_dev                                                                                                             
+You are now connected to database "userlevels_flask_dev" as user "userlevels_flask".                                                                       
+userlevels_flask_dev=# select * from users;                                                                                                                
+ id | name | user_type | email | password | organization | created_on | last_login                                                                         
+----+------+-----------+-------+----------+--------------+------------+------------                                                                        
+(0 rows)            
+```
+Which interestingly, shows the updated column including 'organization'.  However when we do:
+
+```
+userlevels_flask_dev-# select * from documents
+```
+We get nothing.
+
+
+
 ### Creating Users
 
 Originally, our User class was called in the Auth.py function, as simple authentication, as summarized below.
