@@ -764,11 +764,167 @@ Users
 
 * We point out documents with a variable, pointing to th retentions database and back populate to 'users'.
 
-### Finalized Design
+### Finalized Database Design
 
 ![Final Database Design](/readme_img/finaldatabase.png)
 
 ## Logic
+
+
+### Models.py
+
+Within models.py there are a couple of embedded functions:
+
+```
+    def set_password(self, password):
+        """Create hashed password."""
+        self.password = generate_password_hash(
+            password,
+            method='sha256'
+        )
+
+    def check_password(self, password):
+        """Check hashed password."""
+        return check_password_hash(self.password, password)
+
+    def __repr__(self):
+        return '<User {}>'.format(self.username)
+```
+
+These are basically functions that help set passwords. We need to create additional functions that help set the user type.
+
+We also note that Flask-User v1.9 has a built-in [Role-based authorization](https://flask-user.readthedocs.io/en/latest/authorization.html) capability.  There is also a [basic app](https://flask-user.readthedocs.io/en/latest/basic_app.html) example which shows how this functionality can be implemented.
+
+When we look at the user db.Model for this class, we see that:
+
+* User role was structured in a seperate association table.
+* This association table allows what appears to be an arbitrary role name, which can then map back to permissions.
+
+
+```
+    # Define the User data-model.
+    # NB: Make sure to add flask_user UserMixin !!!
+    class User(db.Model, UserMixin):
+        __tablename__ = 'users'
+        id = db.Column(db.Integer, primary_key=True)
+        active = db.Column('is_active', db.Boolean(), nullable=False, server_default='1')
+
+        # User authentication information. The collation='NOCASE' is required
+        # to search case insensitively when USER_IFIND_MODE is 'nocase_collation'.
+        email = db.Column(db.String(255, collation='NOCASE'), nullable=False, unique=True)
+        email_confirmed_at = db.Column(db.DateTime())
+        password = db.Column(db.String(255), nullable=False, server_default='')
+
+        # User information
+        first_name = db.Column(db.String(100, collation='NOCASE'), nullable=False, server_default='')
+        last_name = db.Column(db.String(100, collation='NOCASE'), nullable=False, server_default='')
+
+        # Define the relationship to Role via UserRoles
+        roles = db.relationship('Role', secondary='user_roles')
+
+    # Define the Role data-model
+    class Role(db.Model):
+        __tablename__ = 'roles'
+        id = db.Column(db.Integer(), primary_key=True)
+        name = db.Column(db.String(50), unique=True)
+
+    # Define the UserRoles association table
+    class UserRoles(db.Model):
+        __tablename__ = 'user_roles'
+        id = db.Column(db.Integer(), primary_key=True)
+        user_id = db.Column(db.Integer(), db.ForeignKey('users.id', ondelete='CASCADE'))
+        role_id = db.Column(db.Integer(), db.ForeignKey('roles.id', ondelete='CASCADE'))
+
+    # Setup Flask-User and specify the User data-model
+    user_manager = UserManager(app, db, User)
+
+    # Create all database tables
+    db.create_all()
+
+    # Create 'member@example.com' user with no roles
+    if not User.query.filter(User.email == 'member@example.com').first():
+        user = User(
+            email='member@example.com',
+            email_confirmed_at=datetime.datetime.utcnow(),
+            password=user_manager.hash_password('Password1'),
+        )
+        db.session.add(user)
+        db.session.commit()
+
+    # Create 'admin@example.com' user with 'Admin' and 'Agent' roles
+    if not User.query.filter(User.email == 'admin@example.com').first():
+        user = User(
+            email='admin@example.com',
+            email_confirmed_at=datetime.datetime.utcnow(),
+            password=user_manager.hash_password('Password1'),
+        )
+        user.roles.append(Role(name='Admin'))
+        user.roles.append(Role(name='Agent'))
+        db.session.add(user)
+        db.session.commit()
+```
+
+* In the above example, we define, "roles" as a relationship to Role via UserRoles, which requires an additional association table.
+* Within UserRoles, we get user_id and role_id.
+* role_id maps back to roles.id, in the 'roles' table, which has a "name."
+
+* We can give users "no roles" by not assigning any role.
+* We can also give users roles with user.roles.append(Role(name='Admin')) or user.roles.append(Role(name='Agent')).
+
+This type of logic is consistent with the idea that roles are not fundamentally a part of user information, they are something that gets, "assigned," from a list of options. The idea would be that if you create an increasingly dynamic number of roles arbitrarily over time, you can just keep adding them to the list.
+
+While this is an interesting feature, if we can avoid this level of complexity at this stage, we should.
+
+So, rather than using the function:
+
+```
+user.roles.append(Role(name='Admin'))
+user.roles.append(Role(name='Agent'))
+```
+We could, at the point of sign-up on the appropriate page under auth.py, use the function (assuming user_type='sponsor':
+
+```
+        if existing_user is None:
+        	# create a new user
+            user = User(
+                name=form.name.data,
+                email=form.email.data,
+                organization=form.organization.data
+                user_type='Sponsor'
+            )
+```
+
+Then, within routes, we modify the suggested function from flask-user, but still use the flask-user module with:
+
+```
+    # The Sponsor page requires an 'Sponsor' role.
+    @app.route('/sponsor')
+    @roles_required('Sponsor')    # Use of @roles_required decorator
+    def sponsor_page():
+```
+Essentially using the @roles_required function to achieve what we are looking to do.
+
+* That being said, looking at the [Flask-User](https://github.com/lingthio/Flask-User) Github, we see they list Flask-Login as an alternative, which we are already using.  However it does not seem that Flask-User has built-in permissions.
+* This [StackOverflow answer on role based authorization in flask-login](https://stackoverflow.com/questions/61939800/role-based-authorization-in-flask-login) discussion suggests using Flask Principal.
+* This [Stackoverflow answer on flask login supporting roles](https://stackoverflow.com/questions/52285012/does-flask-login-not-support-roles) recommends spinning up one's own function.
+
+Give the oldness of the Github repos above and the evident non-supportability, it is probably better to just spin up our own function. functools is a cython library, meaning it is likely extremely well supported.
+
+```
+from functools import wraps
+
+def sponsor_required(f):
+@wraps(f)
+def wrap(*args, **kwargs):
+    if current_user.role == "Sponsor":
+        return f(*args, **kwargs)
+    else:
+        flash("You need to be a Sponsor to view this page.")
+        return redirect(url_for('index'))
+
+return wrap
+```
+
 
 ### Creating Users
 
@@ -873,8 +1029,12 @@ Once we have that, we will change the above code to:
 
 ### Changing the auth_bp.signup to sponsorauth.bp.signup and editorauth_bp.signup under auth.py
 
+What we have to do:
+
+* Set the usertype as sponsor or editor
 
 
+### Changing routes.py
 
 
 
@@ -885,6 +1045,7 @@ Once we have that, we will change the above code to:
 * Further, creating pools, teams or groups of eligibility for use together might be something else fairly universal. Essentially, particularly with larger applications, you may have one or a small team of editors who may be assigned to a sponsor (which could also be considered an author).  There may also be different sponsor accounts. The ability to create different types of relationship tables dynamically will be extremely helpful in this scenario.
 * Resources may also be an important thing to create - basically giving a sponsor or privleged account access to a resource, which might be a part of a microservice, even possibly in a different container, may become important in the future.
 * Error prevention and UX considerations are extremely minimal in this application. There are lots of easy to fix, low hanging fruit here.
+* Dedicated role table - rather than having hard-coded roles, just improve the database to have a table including roles, so that we can write one function which dynamically checks for roles rather than have to continously write different functons for different roles - that's if we anticipate many different roles coming into play in the future.
 
 ## References
 
