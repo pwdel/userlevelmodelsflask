@@ -1165,7 +1165,32 @@ userlevels_flask_dev-# select * from documents
 ```
 We get nothing.
 
+Why do we get nothing for documents, not even the table? Perhaps because we haven't constructed the table itself (much less seeded data into it).  
 
+However, within postgres, [we can use a command to describe the database](https://stackoverflow.com/questions/3362225/describe-table-structure).
+
+```
+userlevels_flask_dev-# \d documents                                                                                                                        
+                                          Table "public.documents"                                                                                         
+    Column     |            Type             | Collation | Nullable |                Default                                                               
+---------------+-----------------------------+-----------+----------+---------------------------------------                                               
+ id            | integer                     |           | not null | nextval('documents_id_seq'::regclass)                                                
+ document_name | character varying(100)      |           | not null |                                                                                      
+ body          | character varying(1000)     |           | not null |                                                                                      
+ created_on    | timestamp without time zone |           |          |                                                                                      
+
+userlevels_flask_dev-# \d retentions                                                                                                                       
+                                         Table "public.retentions"                                                                                         
+   Column    |            Type             | Collation | Nullable |                Default                                                                 
+-------------+-----------------------------+-----------+----------+----------------------------------------                                                
+ id          | integer                     |           | not null | nextval('retentions_id_seq'::regclass)                                                 
+ sponsor_id  | integer                     |           | not null |                                                                                        
+ editor_id   | integer                     |           |          |                                                                                        
+ document_id | integer                     |           | not null |                                                                                        
+ created_on  | timestamp without time zone |           |          |                                                                                        
+
+```
+So given the above, it appears that the tables have been set up properly.
 
 ### Creating Users
 
