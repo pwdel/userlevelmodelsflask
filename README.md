@@ -35,9 +35,39 @@ However, this app only included one user type and one main type of Blueprint for
 
 We know that flask Blueprints can be used to build different page types, and that within those page types, logic can be built which stipulates whether a user can view them or not. It would seem reasonable to believe that Blueprints could also be used to determine whether certain types of users could log in to certain types of pages.
 
-## Visual Layout
+## Implementing the Code Changes
+
+In order to make changes and understand how the changes in our code affect our overall design, we have to start off by using our [recently built app](https://github.com/pwdel/postgresloginapiherokudockerflask), taking the code and getting it set up in a Docker container on our local machine.
+
+* We start off by copying all of the original code as well as Docker files into our current repo.
+* We then get a development Docker container running by doing:
+
+1. Remove the current container, since what we are working with now is similar.
+
+```
+sudo docker rm <name>
+```
+
+2. Make sure this app has a different name other than, "hello_flask."  We will arbitrarily choose: "userlevels_flask" This gets set in the following places:
+
+docker-compose.yml - 
+
+2.1 Name of the image.
+2.2 Database URL
+2.3 User database URL
 
 
+dockercompose.prod.yml - 
+
+(Same)
+
+3. Run the build
+
+```
+sudo docker-compose up -d --build
+```
+
+When we run this, we see everything cleanly running on localhost:5000, so we can procede with modifying our existing code.
 
 
 ## Structuring Code
@@ -112,6 +142,7 @@ In our most [recently built app](https://github.com/pwdel/postgresloginapiheroku
 		    			└── js
 
 	    			└── style.css	    			
+
     			└── /templates
 
 	    			├── /auth
@@ -134,6 +165,8 @@ In our most [recently built app](https://github.com/pwdel/postgresloginapiheroku
     				└── signup.jinja2
 
 ```
+
+The above code represents the existing structure, however after mapping things out, we went in and deleted some various un-needed files and folders, namely old templates which were not being used, such as login.html. We're only using jinja2 templates now.
 
 We can modify the above structure according to the needs of the new app.
 
@@ -839,6 +872,10 @@ Once we have that, we will change the above code to:
 
 
 ### Changing the auth_bp.signup to sponsorauth.bp.signup and editorauth_bp.signup under auth.py
+
+
+
+
 
 
 ## Future Work

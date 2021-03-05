@@ -2,13 +2,13 @@ version: '3.8'
 
 services:
   web:
-    image: hello_flask
+    image: userlevels_flask
     container_name: flask
     build: ./services/web
     environment:
       - FLASK_APP=project/__init__.py
       - FLASK_ENV=development
-      - DATABASE_URL=postgresql://hello_flask:hello_flask@db:5432/hello_flask_dev
+      - DATABASE_URL=postgresql://userlevels_flask:userlevels_flask@db:5432/userlevels_flask_dev
       - SQL_HOST=db
       - SQL_PORT=5432
       - DATABASE=postgres
@@ -25,9 +25,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:
-      - POSTGRES_USER=hello_flask
-      - POSTGRES_PASSWORD=hello_flask
-      - POSTGRES_DB=hello_flask_dev
+      - POSTGRES_USER=userlevels_flask
+      - POSTGRES_PASSWORD=userlevels_flask
+      - POSTGRES_DB=userlevels_flask_dev
 
 volumes:
   postgres_data:
