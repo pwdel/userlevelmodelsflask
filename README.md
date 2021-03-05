@@ -1211,13 +1211,47 @@ Going forward, we will need to create two different login pages, one for each ty
 * Users were not called in routes.py, other than [current_user](https://flask-login.readthedocs.io/en/latest/#flask_login.current_user) which is a built-in function for flask-login.
 * Users were not called in routes.py, which is more about blueprints.
 
-#### Creating, Editing and Deleting Documents
+#### Modifiying Auth.py and Routes
+
+* First thing I did, just to clean things up a bit, was to move the /login route to the top of the file, since that's really the, "first page" so to speak.
+* We have to modify the login function to check for user type, and then route the user to the appropriate page.
+* def signup() should be split into two functions, one for sponsor and one for editor.
+
+
+##### login()
+
+* Check user_type
+* If user_type is shown to be sponsor, return one type of template, if editor, return another type of template.
+
+```
+    # Bypass if user is logged in
+    if current_user.is_authenticated:
+        return redirect(url_for('main_bp.dashboard'))"Log in with your User account."
+    )
+```
+
+Should send user to:
+
+* sponsordashboard.jinja2
+
+or
+
+* editordashboard.jinja2
+
+We will have different jinja2 templates for all various views being shown to different users.
+
+We can setup blueprints for different users which point to different template folders and static folers.
+
+##### signup() split into sponsorsignup() and 
+
+
+### Creating, Editing and Deleting Documents
 
 Creating documents appears to call for a completely new set of logic.
 
 If we look at this [Flask Blog Example Github Source Code](https://github.com/gouthambs/Flask-Blogging), we see that they have things architected as follows:
 
-##### Flask-Blogging Rough Outline
+#### Flask-Blogging Rough Outline
 
 * Blogging Engine Module (handles the blog storage, configuration, permissions, extension, configuration, user loaders, and calls other functions.)
 * Has a Post Processor (handles markdown extensions)
