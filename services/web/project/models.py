@@ -3,11 +3,18 @@ from . import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import relationship
+from sqlalchemy import Integer, ForeignKey, String, Column
+from sqlalchemy.ext.declarative import declarative_base
+
+
 
 class User(UserMixin, db.Model):
     """User account model."""
 
-    __tablename__ = 'flasklogin-users'
+    __tablename__ = 'users'
+
     id = db.Column(
         db.Integer,
         primary_key=True
@@ -71,26 +78,26 @@ class User(UserMixin, db.Model):
         return check_password_hash(self.password, password)
 
     def sponsor_required(f):
-    @wraps(f)
-    def wrap(*args, **kwargs):
-        if current_user.role == 'Sponsor':
-            return f(*args, **kwargs)
-        else:
-            flash("You need to be a Sponsor to view this page.")
-            return redirect(url_for('index'))
+        @wraps(f)
+        def wrap(*args, **kwargs):
+            if current_user.role == 'Sponsor':
+                return f(*args, **kwargs)
+            else:
+                flash("You need to be a Sponsor to view this page.")
+                return redirect(url_for('index'))
 
-    return wrap
+        return wrap
 
     def editor_required(f):
-    @wraps(f)
-    def wrap(*args, **kwargs):
-        if current_user.role == 'Editor':
-            return f(*args, **kwargs)
-        else:
-            flash("You need to be an Editor to view this page.")
-            return redirect(url_for('index'))
+        @wraps(f)
+        def wrap(*args, **kwargs):
+            if current_user.role == 'Editor':
+                return f(*args, **kwargs)
+            else:
+                flash("You need to be an Editor to view this page.")
+                return redirect(url_for('index'))
 
-    return wrap
+        return wrap
 
     def __repr__(self):
         return '<User {}>'.format(self.username)
@@ -132,7 +139,7 @@ class Documents(db.Model):
 
 
 
-class Retentions('retentions')
+class Retentions(db.Model):
     """Model for who retains which document"""
     """Associate database."""
     __tablename__ = 'retentions'
@@ -144,21 +151,21 @@ class Retentions('retentions')
 
     sponsor_id = db.Column(
         db.Integer, 
-        db.ForeignKey('users.id')
+        db.ForeignKey('users.id'),
         unique=False,
         nullable=False
     )
 
     editor_id = db.Column(
         db.Integer, 
-        db.ForeignKey('users.id')
+        db.ForeignKey('users.id'),
         unique=False,
         nullable=True
     )
 
     document_id = db.Column(
         db.Integer, 
-        db.ForeignKey('products.id')
+        db.ForeignKey('documents.id'),
         unique=False,
         nullable=False
     )
@@ -173,10 +180,10 @@ class Retentions('retentions')
     """backreferences to user and document tables"""
     user = relationship(
         'User', 
-        backref=backref("retentions", cascade="all, delete-orphan")
+        backref='retentions'
         )
 
     document = relationship(
         'Document', 
-        backref=backref("retentions", cascade="all, delete-orphan")
+        backref='retentions'
         )

@@ -770,7 +770,6 @@ Users
 
 ## Logic
 
-
 ### Models.py
 
 Within models.py there are a couple of embedded functions:
@@ -925,6 +924,183 @@ def wrap(*args, **kwargs):
 return wrap
 ```
 
+functools is included within python's main library, so there is no need to install it.
+
+#### Diagnosing Errors after models.py Modifications
+
+After we get everything modified, we attempted to docker-compose in detached build mode, however this created a situation where there was no localhost port for the actual flask server.
+
+So, running the following allows us to see the actual server processes:
+
+```
+sodu docker-compose up
+```
+This is without '-d build'
+
+1. Here we see the error:
+
+```
+flask  |   File "/usr/src/app/project/models.py", line 74
+flask  |     @wraps(f)
+flask  |     ^
+flask  | IndentationError: expected an indented block
+```
+This was simply fixed by modifying the indentation block.
+
+2. We get a Syntax error on:
+
+```
+flask  |   File "/usr/src/app/project/models.py", line 135
+flask  |     class Retentions('retentions')
+```
+
+This was fixed by inserting the ':' symbol.
+
+3. SyntaxError
+
+```
+flask  |   File "/usr/src/app/project/models.py", line 148
+flask  |     unique=False,
+flask  |     ^
+flask  | SyntaxError: invalid syntax
+```
+Here we have a case of lack of commas after the db.ForeignKey, so we placed that in place:
+
+```
+    sponsor_id = db.Column(
+        db.Integer, 
+        db.ForeignKey('users.id'),
+        unique=False,
+        nullable=False
+    )
+```
+
+4. flask  | NameError: name 'relationship' is not defined
+
+We didn't import 'from sqlalchemy import relationship'.  When we try this, we cannot import 'relationship' from 'sqlalchemy
+
+So, we had to import from [sqlalchemy.orm](https://docs.sqlalchemy.org/en/14/orm/), which is the SQLAlchemy Object Relational Mapper.
+
+```
+from sqlalchemy.orm import relationship
+```
+
+This cleared the error.
+
+5. backref not defined.
+
+```
+flask  |     backref=backref("retentions", cascade="all, delete-orphan")
+flask  | NameError: name 'backref' is not defined
+```
+
+This comes from:
+
+```
+    """backreferences to user and document tables"""
+    user = relationship(
+        'User', 
+        backref=backref('retentions', cascade="all, delete-orphan")
+        )
+
+    document = relationship(
+        'Document', 
+        backref=backref('retentions', cascade="all, delete-orphan")
+        )
+```
+
+Much more precisely, what is [backref](https://docs.sqlalchemy.org/en/13/orm/relationship_api.html#sqlalchemy.orm.relationship.params.backref)?
+
+There are some examples within the [sqlalchemy documentation](https://docs.sqlalchemy.org/en/13/orm/backref.html#relationships-backref).
+
+Notably, the example given from this documentation shows the below imports:
+
+```
+from sqlalchemy import Integer, ForeignKey, String, Column
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+```
+
+What is [Cascades](https://docs.sqlalchemy.org/en/13/orm/cascades.html#unitofwork-cascades)?
+
+Basically, there are a bunch of different options dealing with how items get deleted or updated, based upon SQL rules. Per [this SQL Guide](https://www.sqlshack.com/delete-cascade-and-update-cascade-in-sql-server-foreign-key/):
+
+```
+DELETE CASCADE: When we create a foreign key using this option, it deletes the referencing rows in the child table when the referenced row is deleted in the parent table which has a primary key.
+
+UPDATE CASCADE: When we create a foreign key using UPDATE CASCADE the referencing rows are updated in the child table when the referenced row is updated in the parent table which has a primary key.
+
+```
+The default cascading behavior for backrefs is: 
+
+> cascades will occur bidirectionally by default. This basically means, if one starts with an User object that’s been persisted in the Session. The above behavior is known as the “save update cascade."
+
+What appears to be happening, is that with:
+
+```
+x = relationship('Y', backref=backref('retentions', cascade="all, delete-orphan"))
+```
+backref is referencing backref, so the variable doesn't know what's being assigned. E.g. backref is being treated both as a function and a variable, for some reason here.  So, we could instead go to the default cascading behavior and simply allow backref='retentions'
+
+
+```
+    """backreferences to user and document tables"""
+    user = relationship(
+        'User', 
+        backref='retentions'
+        )
+
+    document = relationship(
+        'Document', 
+        backref='retentions'
+        )
+```
+
+When we did this, that cleared the error.
+
+
+6. Note - __tablename__ = 'flasklogin-users' should be changed to:
+
+__tablename__ = 'users'
+
+After this was changed, there was no apparent errors.
+
+7. class Retentions('retentions'): string error.
+
+```
+flask  |   File "/usr/src/app/project/models.py", line 142, in <module>
+flask  |     class Retentions('retentions'):
+flask  | TypeError: str() argument 2 must be str, not tuple
+
+```
+This is an oversight and we evidently needed the class to have (db.Model) to work properly.  When we fixed this, the error was gone.
+
+8. NoReferencedTableError - products
+
+```
+flask  | sqlalchemy.exc.NoReferencedTableError: Foreign key associated with column 'retentions.document_id' could not find table 'products' with which to generate a foreign key to target column 'id'
+```
+This is a simple oversight - evidently we used "products.id" from seperate code rather than "documents.id"
+
+```
+    document_id = db.Column(
+        db.Integer, 
+        db.ForeignKey('products.id'),
+        unique=False,
+        nullable=False
+    )
+```
+The above cleared the error.
+
+#### Inspecting Database
+
+After all of the above errors were cleared, we were able to get to localhost.
+
+So, we ran in detached mode with:
+
+```
+sudo docker-compose up -d --build
+```
 
 ### Creating Users
 
