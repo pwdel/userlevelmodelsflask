@@ -35,9 +35,39 @@ However, this app only included one user type and one main type of Blueprint for
 
 We know that flask Blueprints can be used to build different page types, and that within those page types, logic can be built which stipulates whether a user can view them or not. It would seem reasonable to believe that Blueprints could also be used to determine whether certain types of users could log in to certain types of pages.
 
-## Visual Layout
+## Implementing the Code Changes
+
+In order to make changes and understand how the changes in our code affect our overall design, we have to start off by using our [recently built app](https://github.com/pwdel/postgresloginapiherokudockerflask), taking the code and getting it set up in a Docker container on our local machine.
+
+* We start off by copying all of the original code as well as Docker files into our current repo.
+* We then get a development Docker container running by doing:
+
+1. Remove the current container, since what we are working with now is similar.
+
+```
+sudo docker rm <name>
+```
+
+2. Make sure this app has a different name other than, "hello_flask."  We will arbitrarily choose: "userlevels_flask" This gets set in the following places:
+
+docker-compose.yml - 
+
+2.1 Name of the image.
+2.2 Database URL
+2.3 User database URL
 
 
+dockercompose.prod.yml - 
+
+(Same)
+
+3. Run the build
+
+```
+sudo docker-compose up -d --build
+```
+
+When we run this, we see everything cleanly running on localhost:5000, so we can procede with modifying our existing code.
 
 
 ## Structuring Code
@@ -112,6 +142,7 @@ In our most [recently built app](https://github.com/pwdel/postgresloginapiheroku
 		    			└── js
 
 	    			└── style.css	    			
+
     			└── /templates
 
 	    			├── /auth
@@ -134,6 +165,8 @@ In our most [recently built app](https://github.com/pwdel/postgresloginapiheroku
     				└── signup.jinja2
 
 ```
+
+The above code represents the existing structure, however after mapping things out, we went in and deleted some various un-needed files and folders, namely old templates which were not being used, such as login.html. We're only using jinja2 templates now.
 
 We can modify the above structure according to the needs of the new app.
 
@@ -731,13 +764,465 @@ Users
 
 * We point out documents with a variable, pointing to th retentions database and back populate to 'users'.
 
-### Finalized Design
+### Finalized Database Design
 
 ![Final Database Design](/readme_img/finaldatabase.png)
 
 ## Logic
 
-### Creating Users
+### Models.py
+
+Within models.py there are a couple of embedded functions:
+
+```
+    def set_password(self, password):
+        """Create hashed password."""
+        self.password = generate_password_hash(
+            password,
+            method='sha256'
+        )
+
+    def check_password(self, password):
+        """Check hashed password."""
+        return check_password_hash(self.password, password)
+
+    def __repr__(self):
+        return '<User {}>'.format(self.username)
+```
+
+These are basically functions that help set passwords. We need to create additional functions that help set the user type.
+
+We also note that Flask-User v1.9 has a built-in [Role-based authorization](https://flask-user.readthedocs.io/en/latest/authorization.html) capability.  There is also a [basic app](https://flask-user.readthedocs.io/en/latest/basic_app.html) example which shows how this functionality can be implemented.
+
+When we look at the user db.Model for this class, we see that:
+
+* User role was structured in a seperate association table.
+* This association table allows what appears to be an arbitrary role name, which can then map back to permissions.
+
+
+```
+    # Define the User data-model.
+    # NB: Make sure to add flask_user UserMixin !!!
+    class User(db.Model, UserMixin):
+        __tablename__ = 'users'
+        id = db.Column(db.Integer, primary_key=True)
+        active = db.Column('is_active', db.Boolean(), nullable=False, server_default='1')
+
+        # User authentication information. The collation='NOCASE' is required
+        # to search case insensitively when USER_IFIND_MODE is 'nocase_collation'.
+        email = db.Column(db.String(255, collation='NOCASE'), nullable=False, unique=True)
+        email_confirmed_at = db.Column(db.DateTime())
+        password = db.Column(db.String(255), nullable=False, server_default='')
+
+        # User information
+        first_name = db.Column(db.String(100, collation='NOCASE'), nullable=False, server_default='')
+        last_name = db.Column(db.String(100, collation='NOCASE'), nullable=False, server_default='')
+
+        # Define the relationship to Role via UserRoles
+        roles = db.relationship('Role', secondary='user_roles')
+
+    # Define the Role data-model
+    class Role(db.Model):
+        __tablename__ = 'roles'
+        id = db.Column(db.Integer(), primary_key=True)
+        name = db.Column(db.String(50), unique=True)
+
+    # Define the UserRoles association table
+    class UserRoles(db.Model):
+        __tablename__ = 'user_roles'
+        id = db.Column(db.Integer(), primary_key=True)
+        user_id = db.Column(db.Integer(), db.ForeignKey('users.id', ondelete='CASCADE'))
+        role_id = db.Column(db.Integer(), db.ForeignKey('roles.id', ondelete='CASCADE'))
+
+    # Setup Flask-User and specify the User data-model
+    user_manager = UserManager(app, db, User)
+
+    # Create all database tables
+    db.create_all()
+
+    # Create 'member@example.com' user with no roles
+    if not User.query.filter(User.email == 'member@example.com').first():
+        user = User(
+            email='member@example.com',
+            email_confirmed_at=datetime.datetime.utcnow(),
+            password=user_manager.hash_password('Password1'),
+        )
+        db.session.add(user)
+        db.session.commit()
+
+    # Create 'admin@example.com' user with 'Admin' and 'Agent' roles
+    if not User.query.filter(User.email == 'admin@example.com').first():
+        user = User(
+            email='admin@example.com',
+            email_confirmed_at=datetime.datetime.utcnow(),
+            password=user_manager.hash_password('Password1'),
+        )
+        user.roles.append(Role(name='Admin'))
+        user.roles.append(Role(name='Agent'))
+        db.session.add(user)
+        db.session.commit()
+```
+
+* In the above example, we define, "roles" as a relationship to Role via UserRoles, which requires an additional association table.
+* Within UserRoles, we get user_id and role_id.
+* role_id maps back to roles.id, in the 'roles' table, which has a "name."
+
+* We can give users "no roles" by not assigning any role.
+* We can also give users roles with user.roles.append(Role(name='Admin')) or user.roles.append(Role(name='Agent')).
+
+This type of logic is consistent with the idea that roles are not fundamentally a part of user information, they are something that gets, "assigned," from a list of options. The idea would be that if you create an increasingly dynamic number of roles arbitrarily over time, you can just keep adding them to the list.
+
+While this is an interesting feature, if we can avoid this level of complexity at this stage, we should.
+
+So, rather than using the function:
+
+```
+user.roles.append(Role(name='Admin'))
+user.roles.append(Role(name='Agent'))
+```
+We could, at the point of sign-up on the appropriate page under auth.py, use the function (assuming user_type='sponsor':
+
+```
+        if existing_user is None:
+        	# create a new user
+            user = User(
+                name=form.name.data,
+                email=form.email.data,
+                organization=form.organization.data
+                user_type='Sponsor'
+            )
+```
+
+Then, within routes, we modify the suggested function from flask-user, but still use the flask-user module with:
+
+```
+    # The Sponsor page requires an 'Sponsor' role.
+    @app.route('/sponsor')
+    @roles_required('Sponsor')    # Use of @roles_required decorator
+    def sponsor_page():
+```
+Essentially using the @roles_required function to achieve what we are looking to do.
+
+* That being said, looking at the [Flask-User](https://github.com/lingthio/Flask-User) Github, we see they list Flask-Login as an alternative, which we are already using.  However it does not seem that Flask-User has built-in permissions.
+* This [StackOverflow answer on role based authorization in flask-login](https://stackoverflow.com/questions/61939800/role-based-authorization-in-flask-login) discussion suggests using Flask Principal.
+* This [Stackoverflow answer on flask login supporting roles](https://stackoverflow.com/questions/52285012/does-flask-login-not-support-roles) recommends spinning up one's own function.
+
+Give the oldness of the Github repos above and the evident non-supportability, it is probably better to just spin up our own function. functools is a cython library, meaning it is likely extremely well supported.
+
+```
+from functools import wraps
+
+def sponsor_required(f):
+@wraps(f)
+def wrap(*args, **kwargs):
+    if current_user.role == "Sponsor":
+        return f(*args, **kwargs)
+    else:
+        flash("You need to be a Sponsor to view this page.")
+        return redirect(url_for('index'))
+
+return wrap
+```
+
+functools is included within python's main library, so there is no need to install it.
+
+#### Diagnosing Errors after models.py Modifications
+
+After we get everything modified, we attempted to docker-compose in detached build mode, however this created a situation where there was no localhost port for the actual flask server.
+
+So, running the following allows us to see the actual server processes:
+
+```
+sodu docker-compose up
+```
+This is without '-d build'
+
+1. Here we see the error:
+
+```
+flask  |   File "/usr/src/app/project/models.py", line 74
+flask  |     @wraps(f)
+flask  |     ^
+flask  | IndentationError: expected an indented block
+```
+This was simply fixed by modifying the indentation block.
+
+2. We get a Syntax error on:
+
+```
+flask  |   File "/usr/src/app/project/models.py", line 135
+flask  |     class Retentions('retentions')
+```
+
+This was fixed by inserting the ':' symbol.
+
+3. SyntaxError
+
+```
+flask  |   File "/usr/src/app/project/models.py", line 148
+flask  |     unique=False,
+flask  |     ^
+flask  | SyntaxError: invalid syntax
+```
+Here we have a case of lack of commas after the db.ForeignKey, so we placed that in place:
+
+```
+    sponsor_id = db.Column(
+        db.Integer, 
+        db.ForeignKey('users.id'),
+        unique=False,
+        nullable=False
+    )
+```
+
+4. flask  | NameError: name 'relationship' is not defined
+
+We didn't import 'from sqlalchemy import relationship'.  When we try this, we cannot import 'relationship' from 'sqlalchemy
+
+So, we had to import from [sqlalchemy.orm](https://docs.sqlalchemy.org/en/14/orm/), which is the SQLAlchemy Object Relational Mapper.
+
+```
+from sqlalchemy.orm import relationship
+```
+
+This cleared the error.
+
+5. backref not defined.
+
+```
+flask  |     backref=backref("retentions", cascade="all, delete-orphan")
+flask  | NameError: name 'backref' is not defined
+```
+
+This comes from:
+
+```
+    """backreferences to user and document tables"""
+    user = relationship(
+        'User', 
+        backref=backref('retentions', cascade="all, delete-orphan")
+        )
+
+    document = relationship(
+        'Document', 
+        backref=backref('retentions', cascade="all, delete-orphan")
+        )
+```
+
+Much more precisely, what is [backref](https://docs.sqlalchemy.org/en/13/orm/relationship_api.html#sqlalchemy.orm.relationship.params.backref)?
+
+There are some examples within the [sqlalchemy documentation](https://docs.sqlalchemy.org/en/13/orm/backref.html#relationships-backref).
+
+Notably, the example given from this documentation shows the below imports:
+
+```
+from sqlalchemy import Integer, ForeignKey, String, Column
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+```
+
+What is [Cascades](https://docs.sqlalchemy.org/en/13/orm/cascades.html#unitofwork-cascades)?
+
+Basically, there are a bunch of different options dealing with how items get deleted or updated, based upon SQL rules. Per [this SQL Guide](https://www.sqlshack.com/delete-cascade-and-update-cascade-in-sql-server-foreign-key/):
+
+```
+DELETE CASCADE: When we create a foreign key using this option, it deletes the referencing rows in the child table when the referenced row is deleted in the parent table which has a primary key.
+
+UPDATE CASCADE: When we create a foreign key using UPDATE CASCADE the referencing rows are updated in the child table when the referenced row is updated in the parent table which has a primary key.
+
+```
+The default cascading behavior for backrefs is: 
+
+> cascades will occur bidirectionally by default. This basically means, if one starts with an User object that’s been persisted in the Session. The above behavior is known as the “save update cascade."
+
+What appears to be happening, is that with:
+
+```
+x = relationship('Y', backref=backref('retentions', cascade="all, delete-orphan"))
+```
+backref is referencing backref, so the variable doesn't know what's being assigned. E.g. backref is being treated both as a function and a variable, for some reason here.  So, we could instead go to the default cascading behavior and simply allow backref='retentions'
+
+
+```
+    """backreferences to user and document tables"""
+    user = relationship(
+        'User', 
+        backref='retentions'
+        )
+
+    document = relationship(
+        'Document', 
+        backref='retentions'
+        )
+```
+
+When we did this, that cleared the error.
+
+
+6. Note - __tablename__ = 'flasklogin-users' should be changed to:
+
+__tablename__ = 'users'
+
+After this was changed, there was no apparent errors.
+
+7. class Retentions('retentions'): string error.
+
+```
+flask  |   File "/usr/src/app/project/models.py", line 142, in <module>
+flask  |     class Retentions('retentions'):
+flask  | TypeError: str() argument 2 must be str, not tuple
+
+```
+This is an oversight and we evidently needed the class to have (db.Model) to work properly.  When we fixed this, the error was gone.
+
+8. NoReferencedTableError - products
+
+```
+flask  | sqlalchemy.exc.NoReferencedTableError: Foreign key associated with column 'retentions.document_id' could not find table 'products' with which to generate a foreign key to target column 'id'
+```
+This is a simple oversight - evidently we used "products.id" from seperate code rather than "documents.id"
+
+```
+    document_id = db.Column(
+        db.Integer, 
+        db.ForeignKey('products.id'),
+        unique=False,
+        nullable=False
+    )
+```
+The above cleared the error.
+
+#### Inspecting Database
+
+After all of the above errors were cleared, we were able to get to localhost.
+
+So, we ran in detached mode with:
+
+```
+sudo docker-compose up -d --build
+```
+
+We now have a perpetually running app on localhost.  However, we need to be able to log into bash and inxpect the database, so we use:
+
+```
+sudo docker run --rm -it userlevels_flask bash
+```
+From within the root docker container, we get:
+
+```
+root@af424625f527:/usr/src/app# 
+
+```
+
+From the command line, we can log into the database with (using our new database name):
+
+```
+sudo docker-compose exec db psql --username=userlevels_flask --dbname=userlevels_flask_dev
+```
+Checking for a list of databases:
+
+```
+userlevels_flask_dev=# \l                                                                                                                                  
+                                                  List of databases                                                                                        
+         Name         |      Owner       | Encoding |  Collate   |   Ctype    |           Access privileges                                                
+----------------------+------------------+----------+------------+------------+---------------------------------------                                     
+ postgres             | userlevels_flask | UTF8     | en_US.utf8 | en_US.utf8 |                                                                            
+ template0            | userlevels_flask | UTF8     | en_US.utf8 | en_US.utf8 | =c/userlevels_flask                  +                                     
+                      |                  |          |            |            | userlevels_flask=CTc/userlevels_flask                                      
+ template1            | userlevels_flask | UTF8     | en_US.utf8 | en_US.utf8 | =c/userlevels_flask                  +                                     
+                      |                  |          |            |            | userlevels_flask=CTc/userlevels_flask                                      
+ userlevels_flask_dev | userlevels_flask | UTF8     | en_US.utf8 | en_US.utf8 |                                         
+
+```
+
+
+Checking for a list of relations:
+
+```
+userlevels_flask_dev=# \dt                                                                                                                                 
+                  List of relations                                                                                                                        
+ Schema |       Name       | Type  |      Owner                                                                                                            
+--------+------------------+-------+------------------                                                                                                     
+ public | documents        | table | userlevels_flask                                                                                                      
+ public | flasklogin-users | table | userlevels_flask                                                                                                      
+ public | retentions       | table | userlevels_flask                                                                                                      
+ public | users            | table | userlevels_flask 
+```
+We can look at the database by connecting to it, and then selecting * from users.
+
+```
+userlevels_flask_dev=# \c userlevels_flask_dev                                                                                                             
+You are now connected to database "userlevels_flask_dev" as user "userlevels_flask".                                                                       
+userlevels_flask_dev=# select * from users;                                                                                                                
+ id | name | user_type | email | password | organization | created_on | last_login                                                                         
+----+------+-----------+-------+----------+--------------+------------+------------                                                                        
+(0 rows)            
+```
+Which interestingly, shows the updated column including 'organization'.  However when we do:
+
+```
+userlevels_flask_dev-# select * from documents
+```
+We get nothing.
+
+Why do we get nothing for documents, not even the table? Perhaps because we haven't constructed the table itself (much less seeded data into it).  
+
+However, within postgres, [we can use a command to describe the database](https://stackoverflow.com/questions/3362225/describe-table-structure).
+
+```
+userlevels_flask_dev-# \d documents                                                                                                                        
+                                          Table "public.documents"                                                                                         
+    Column     |            Type             | Collation | Nullable |                Default                                                               
+---------------+-----------------------------+-----------+----------+---------------------------------------                                               
+ id            | integer                     |           | not null | nextval('documents_id_seq'::regclass)                                                
+ document_name | character varying(100)      |           | not null |                                                                                      
+ body          | character varying(1000)     |           | not null |                                                                                      
+ created_on    | timestamp without time zone |           |          |                                                                                      
+
+userlevels_flask_dev-# \d retentions                                                                                                                       
+                                         Table "public.retentions"                                                                                         
+   Column    |            Type             | Collation | Nullable |                Default                                                                 
+-------------+-----------------------------+-----------+----------+----------------------------------------                                                
+ id          | integer                     |           | not null | nextval('retentions_id_seq'::regclass)                                                 
+ sponsor_id  | integer                     |           | not null |                                                                                        
+ editor_id   | integer                     |           |          |                                                                                        
+ document_id | integer                     |           | not null |                                                                                        
+ created_on  | timestamp without time zone |           |          |                                                                                        
+
+```
+So given the above, it appears that the tables have been set up properly.
+
+## Creating the Forms
+
+In order to know what forms are needed, I needed a basic layout of the software, so [I created one in Balsamiq](/balsamiq/layout.bmpr).
+
+From that, I created the following generalized layout:
+
+![](/readme_img/LoginPage.png)
+
+![](/readme_img/SponsorSignup.png)
+
+![](/readme_img/SponsorDashboard.png)
+
+![](/readme_img/SponsorDocuments.png)
+
+![](/readme_img/SponsorEditAssign.png)
+
+![](/readme_img/SponsorNewDocument.png)
+
+![](/readme_img/EditorSignupPage.png)
+
+![](/readme_img/EditorDocuments.png)
+
+![](/readme_img/EditorEditAssign.png)
+
+### forms.py
+
+Since we now have two forms of users which can enter in through two different forms, we need to modify the forms.py.
+
+
+
+## Creating Users via Forms
 
 Originally, our User class was called in the Auth.py function, as simple authentication, as summarized below.
 
@@ -756,13 +1241,62 @@ Going forward, we will need to create two different login pages, one for each ty
 * Users were not called in routes.py, other than [current_user](https://flask-login.readthedocs.io/en/latest/#flask_login.current_user) which is a built-in function for flask-login.
 * Users were not called in routes.py, which is more about blueprints.
 
-#### Creating, Editing and Deleting Documents
+#### Modifiying Auth.py and Routes
+
+* First thing I did, just to clean things up a bit, was to move the /login route to the top of the file, since that's really the, "first page" so to speak.
+* We have to modify the login function to check for user type, and then route the user to the appropriate page.
+* def signup() should be split into two functions, one for sponsor and one for editor.
+
+##### signup() split into sponsorsignup() and editorsignup()
+
+It seems that the most logical place to start is at the point where the user gets created, to be able to understand more about how the data is being inserted into the database.
+
+
+
+##### login() within auth.py
+
+* Check user_type
+* If user_type is shown to be sponsor, return one type of template, if editor, return another type of template.
+
+```
+    # Bypass if user is logged in
+    if current_user.is_authenticated:
+        return redirect(url_for('main_bp.dashboard'))"Log in with your User account."
+    )
+```
+
+Should send user to:
+
+* dashboard_sponsor.jinja2
+
+or
+
+* dashboard_editor.jinja2
+
+We will have different jinja2 templates for all various views being shown to different users.
+
+We can setup blueprints for different users which point to different template folders and static folers.  After adding the appropriate blueprints and dashboards, I modified the bypass code as follows:
+
+```
+    # Bypass if user is logged in
+    if current_user.is_authenticated:
+    	if current_user.
+	        return redirect(url_for('main_bp.dashboard'))"Log in with your User account."
+    	if current_user.
+	        return redirect(url_for('main_bp.dashboard'))"Log in with your User account."    		        
+    )
+```
+
+
+
+
+### Creating, Editing and Deleting Documents
 
 Creating documents appears to call for a completely new set of logic.
 
 If we look at this [Flask Blog Example Github Source Code](https://github.com/gouthambs/Flask-Blogging), we see that they have things architected as follows:
 
-##### Flask-Blogging Rough Outline
+#### Flask-Blogging Rough Outline
 
 * Blogging Engine Module (handles the blog storage, configuration, permissions, extension, configuration, user loaders, and calls other functions.)
 * Has a Post Processor (handles markdown extensions)
@@ -773,40 +1307,92 @@ Basically, it isn't well-organized and there is not a lot of documentation regar
 
 However, the convention they seem to use is put a lot of processes into, "Blogging Engine."  We could likewise, create an, "Engine" however we might just call it a, "DocumentEngine," within engine.py.
 
-## Creating the Forms
+## Logical Flows
 
-In order to know what forms are needed, I needed a basic layout of the software, so [I created one in Balsamiq](/balsamiq/layout.bmpr).
+To create the logic behind what user can see which dashboard, I used [Lucid online flowcharts](https://lucid.app/documents#/dashboard).
 
-From that, I created the following generalized layout:
+![](/readme_img/logical.png)
 
-![](/readme_img/LoginPage.png)
+## Pages and Blueprints for Different User Types
 
-![](/readme_img/SponsorSignup.png)
+Above, we created a layout which helps us understand what kinds of users have what kinds of dashboards. We can start out with the, "Signup" functionality which now has one type of user, and create a setup which will allow links to two different types of users.
 
-![](/readme_img/SponsorDashboard.png)
+### Adding Additional Blueprints
 
-![](/readme_img/SponsorDashboard.png)
+I added a couple new blueprints for sponsors and editors in the routes.py file, where other blueprints were kept.
 
-![](/readme_img/SponsorDocuments.png)
+```
 
-![](/readme_img/SponsorEditAssign.png)
+# Sponsor Blueprint
+sponsor_bp = Blueprint(
+    'sponsor_bp', __name__,
+    template_folder='templates_sponsors',
+    static_folder='static'
+)
 
-![](/readme_img/SponsorNewDocument.png)
+# Editor Blueprint
+editor_bp = Blueprint(
+    'editor_bp', __name__,
+    template_folder='templates_editors',
+    static_folder='static'
+)
 
-![](/readme_img/EditorSignupPage.png)
+```
 
-![](/readme_img/EditorDocuments.png)
+Corresponding to these blueprints, I added folders and .jinja2 files within each folder into the project structure.
 
-![](/readme_img/EditorEditAssign.png)
+I also deleted "home_bp" and all corresponding routes to avoid confusion, since this is not being used.
 
-## Dashboards for Different Users
+### Changing the Login Page - login.jinja2
 
-## Future References
+* The first thing that needs to be done on the login page, is simply to create buttons which link off to different types of signup pages.
+
+```
+      <div class="login-signup">
+        <p></p>
+        <span>Don't have an account?</span>
+        <p></p>
+        <a href="{{ url_for('auth_bp.signup') }}">Sign up.</a>
+      </div>
+```
+Note that this code sends the user over to blueprint: auth_bp.signup.
+
+We're going to have to duplicate this into sponsorauth_bp.signup and editorauth_bp.signup to have two different signup blueprints for the different user types.
+
+Once we have that, we will change the above code to:
+
+```
+      <div class="login-signup">
+        <p></p>
+        <span>Don't have an account?</span>
+        <p></p>
+        <a href="{{ url_for('editorauth_bp.signup') }}">Sign up as an Editor.</a>
+        <p></p>
+        <a href="{{ url_for('sponsorauth_bp.signup') }}">Sign up as a Sponsor.</a>        
+        <p></p>        
+      </div>
+```
+
+
+### Changing the auth_bp.signup to sponsorauth.bp.signup and editorauth_bp.signup under auth.py
+
+What we have to do:
+
+* Set the usertype as sponsor or editor
+
+
+### Changing routes.py
+
+
+
+## Future Work
 
 * We may want to create different tables for different types of users rather than keep the users all in the same table. This is a philosophical design problem. Basically this design problem is based upon whether sponsors and editors may ever change their type, e.g. whether editors may ever be promoted to sponsors. If this is a customer/vendor relationship, then there may never or very infrequently a need to switch user type back and fourth. However if this is a blog writing application, with a group or team of relatively equal types of people who can perform different roles over time, it may be better to keep them in the same table.
 * Having an additional user class, basically an administrator, which would be able to change, "trial accounts" who can only see the software into, "sponsor accounts" who can have access to the software, will be fairly critical.  Basically if this is a paid service, or even if it's a non-paid service, there needs to be some kind of administrative user management.
 * Further, creating pools, teams or groups of eligibility for use together might be something else fairly universal. Essentially, particularly with larger applications, you may have one or a small team of editors who may be assigned to a sponsor (which could also be considered an author).  There may also be different sponsor accounts. The ability to create different types of relationship tables dynamically will be extremely helpful in this scenario.
 * Resources may also be an important thing to create - basically giving a sponsor or privleged account access to a resource, which might be a part of a microservice, even possibly in a different container, may become important in the future.
+* Error prevention and UX considerations are extremely minimal in this application. There are lots of easy to fix, low hanging fruit here.
+* Dedicated role table - rather than having hard-coded roles, just improve the database to have a table including roles, so that we can write one function which dynamically checks for roles rather than have to continously write different functons for different roles - that's if we anticipate many different roles coming into play in the future.
 
 ## References
 
