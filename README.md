@@ -1220,7 +1220,32 @@ From that, I created the following generalized layout:
 
 Since we now have two forms of users which can enter in through two different forms, we need to modify the forms.py.
 
+Basically, we need two forms - one for the sponsor page, one for the editor page.
 
+#### Sponsor Form on forms.py
+
+So basically the main thing we need to do here is ensure that everything on our form corresponds to the user_type Sponsor in our database.
+
+Form-Generated Data:
+
+* name - enter in form
+* email - enter in form
+* password - enter in form
+* organization - enter in form
+
+Auto-Generated Data:
+
+* user_type - automatically generated based upon page
+* id - automatically generated
+* created_on - automatically generated
+* last_login - automatically generated
+
+What I did to change the form was basically copy and paste the original form and create:
+
+```
+class SignupFormSponsor(FlaskForm):
+```
+Which has the four (4) human-inputed datapoints, same as the original sign-up form. It's possible that we don't really need two different forms.
 
 ## Creating Users via Forms
 
@@ -1251,7 +1276,141 @@ Going forward, we will need to create two different login pages, one for each ty
 
 It seems that the most logical place to start is at the point where the user gets created, to be able to understand more about how the data is being inserted into the database.
 
+We set up a custom class within the forms.py file, class SignupFormSponsor(FlaskForm):
 
+We start with:
+
+```
+@auth_bp.route('/signupsponsor', methods=['GET', 'POST'])
+def signupsponsor():
+```
+
+So, we are using the auth_bp, rather than sponsor_bp.
+
+```
+# Blueprint Configuration
+auth_bp = Blueprint(
+    'auth_bp', __name__,
+    template_folder='templates',
+    static_folder='static'
+)
+```
+
+We could hypothetically set up a completely different blueprint for auth_sponsor_bp and auth_editor_bp.
+
+However, to keep things simple, we can just see if we can use the same auth blueprint for both, to have less code to change, and add usertype within the function itself.
+
+* On our URL for /signupsponsor
+* We are calling function signupsponsor()
+* We are using the form = SponsorSignupForm()
+
+The key point of creating a new user appears to be here:
+
+```
+            # create a new user
+            user = User(
+                name=form.name.data,
+                email=form.email.data,
+                website=form.website.data
+            )
+```
+
+Which we can change to:
+
+```
+            # create a new user
+            user = User(
+                name=form.name.data,
+                email=form.email.data,
+                organization=form.organization.data,
+                user_type='sponsor'
+            )
+```
+
+Note again back on our form in forms.py that we had changed, "website" (lower case for the variable) to "organization" (lower case for a variable) and 'Organization' as the String prompt.
+
+```
+    organization = StringField(
+        'Organization',
+        validators=[Optional()]
+    )
+    submit = SubmitField('Register')
+```
+We also have to be sure to import the new type of signup form:
+
+```
+from .forms import LoginForm, SignupForm. SignupFormSponsor
+```
+Also, we have to modify our Jinja2 template so that we are no longer asking for a website, but rather an organization, change:
+
+```
+      <fieldset class="website">
+        {{ form.website.label }}
+        {{ form.website(placeholder='http://example.com') }}
+      </fieldset>
+```
+to:
+
+```
+      <fieldset class="organization">
+        {{ form.organization.label }}
+        {{ form.organization(placeholder='Organization, LLC') }}
+      </fieldset>
+```
+
+After this point, the application writes a new user with the information given, as shown below:
+
+```
+            db.session.add(user)
+            db.session.commit()  # Create new user
+            login_user(user)  # Log in as newly created user - from flask_login
+```
+
+I realized upon reading further into the "def signupsponsor():" function, that the auth_bp blueprint does not limit directing only to the url's on its own blueprint, we can hand off the user to another blueprint using the following (which was originally handing the user over to main_bp.dashboard):
+
+```
+return redirect(url_for('sponsor_bp.dashboard'))
+```
+
+The final step is to of course attempt to sign in as a sponsor, and then inspect the database to see if it worked.
+
+In our case, I attempted to sign up and got the following:
+
+```
+sqlalchemy.exc.InvalidRequestError: When initializing mapper mapped class User->users, expression 'Document' failed to locate a name ('Document'). If this is a class name, consider adding this relationship() to the <class 'project.models.User'> class after both dependent classes have been defined.
+```
+I also noted that the user was being redirected to /signup rather than /dashboard_sponsor.
+
+Basically, it looks like the error is referring to this portion of the models.py file, specifically the User class where we backreference to the Document class.
+
+```
+    """Backreference to Document class on retentions associate table."""
+    documents = relationship(
+        'Document', 
+        secondary='retentions', 
+        back_populates='users'
+        )
+```
+
+Different troubleshooting guides online mention using a, "Base" model as an input in order for SQLAlchemy to work with relational databases.
+
+* [StackOverflow SQAlchemy Import Tables with Relationships](https://stackoverflow.com/questions/11046039/sqlalchemy-import-tables-with-relationships)
+* []
+
+<hr>
+
+Summary of Signup form Conversion for New Data Capture
+
+0. If you haven't already, update your database to hold the new data.
+1. Setup a Custom Class in forms.py if needed, to capture newly needed data or change old form.
+2. Configure blueprint and folder layout if needed to point to new webpage layouts and/or static css, js, etc.
+3. If necessary, modify or create a New python Function or Class to handle thew new part of the application you are working with.
+4. Modify the Custom Class call on the New Function for the part of the application you are working on to include the data you are looking for, for either automatic or manually recorded data. Make sure you pay attention to your data model to make sure the database has been updated.
+4. 
+
+<hr>
+
+![](/readme_img/ConvertFlaskFormsSummary.png)
 
 ##### login() within auth.py
 

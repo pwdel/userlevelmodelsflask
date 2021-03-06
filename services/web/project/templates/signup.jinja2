@@ -30,7 +30,7 @@
 
       <fieldset class="name">
         {{ form.name.label }}
-        {{ form.name(placeholder='John Smith') }}
+        {{ form.name(placeholder='Firstname Lastname') }}
         {% if form.name.errors %}
           <ul class="errors">
             {% for error in form.email.errors %}
@@ -72,11 +72,11 @@
         {% endif %}
       </fieldset>
 
-      <fieldset class="website">
-        {{ form.website.label }}
-        {{ form.website(placeholder='http://example.com') }}
+      <fieldset class="organization">
+        {{ form.organization.label }}
+        {{ form.organization(placeholder='Organization, LLC') }}
       </fieldset>
-
+      
       <div class="submit-button">
         {{ form.submit }}
       </div>
