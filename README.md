@@ -1192,76 +1192,6 @@ userlevels_flask_dev-# \d retentions
 ```
 So given the above, it appears that the tables have been set up properly.
 
-### Creating Users
-
-Originally, our User class was called in the Auth.py function, as simple authentication, as summarized below.
-
-Going forward, we will need to create two different login pages, one for each type of user. For the purposes of this app, which is a demonstration, we may need to simply create the users at-will with no approval.
-
-#### Auth.py
-
-* in [auth.py](https://github.com/pwdel/postgresloginapiherokudockerflask/blob/main/services/web/project/auth.py) it was imported "from .models import User"
-* within a form, using validation_on_submit
-* User name, email, website, password was inserted in the form.
-* After the user was created, a template was rendered.
-* There was also authentication logic, querying for user existence and checking password.
-
-* Users were not called in assets.py, which is more about static assets.
-* Users were not called in forms.py, but this file was used to create forms that would be used in auth.py.
-* Users were not called in routes.py, other than [current_user](https://flask-login.readthedocs.io/en/latest/#flask_login.current_user) which is a built-in function for flask-login.
-* Users were not called in routes.py, which is more about blueprints.
-
-#### Modifiying Auth.py and Routes
-
-* First thing I did, just to clean things up a bit, was to move the /login route to the top of the file, since that's really the, "first page" so to speak.
-* We have to modify the login function to check for user type, and then route the user to the appropriate page.
-* def signup() should be split into two functions, one for sponsor and one for editor.
-
-
-##### login()
-
-* Check user_type
-* If user_type is shown to be sponsor, return one type of template, if editor, return another type of template.
-
-```
-    # Bypass if user is logged in
-    if current_user.is_authenticated:
-        return redirect(url_for('main_bp.dashboard'))"Log in with your User account."
-    )
-```
-
-Should send user to:
-
-* sponsordashboard.jinja2
-
-or
-
-* editordashboard.jinja2
-
-We will have different jinja2 templates for all various views being shown to different users.
-
-We can setup blueprints for different users which point to different template folders and static folers.
-
-##### signup() split into sponsorsignup() and 
-
-
-### Creating, Editing and Deleting Documents
-
-Creating documents appears to call for a completely new set of logic.
-
-If we look at this [Flask Blog Example Github Source Code](https://github.com/gouthambs/Flask-Blogging), we see that they have things architected as follows:
-
-#### Flask-Blogging Rough Outline
-
-* Blogging Engine Module (handles the blog storage, configuration, permissions, extension, configuration, user loaders, and calls other functions.)
-* Has a Post Processor (handles markdown extensions)
-* Uses SQLAStorage
-* Stores data in Google Cloud
-
-Basically, it isn't well-organized and there is not a lot of documentation regarding how it should be organized.
-
-However, the convention they seem to use is put a lot of processes into, "Blogging Engine."  We could likewise, create an, "Engine" however we might just call it a, "DocumentEngine," within engine.py.
-
 ## Creating the Forms
 
 In order to know what forms are needed, I needed a basic layout of the software, so [I created one in Balsamiq](/balsamiq/layout.bmpr).
@@ -1286,6 +1216,97 @@ From that, I created the following generalized layout:
 
 ![](/readme_img/EditorEditAssign.png)
 
+### forms.py
+
+Since we now have two forms of users which can enter in through two different forms, we need to modify the forms.py.
+
+
+
+## Creating Users via Forms
+
+Originally, our User class was called in the Auth.py function, as simple authentication, as summarized below.
+
+Going forward, we will need to create two different login pages, one for each type of user. For the purposes of this app, which is a demonstration, we may need to simply create the users at-will with no approval.
+
+#### Auth.py
+
+* in [auth.py](https://github.com/pwdel/postgresloginapiherokudockerflask/blob/main/services/web/project/auth.py) it was imported "from .models import User"
+* within a form, using validation_on_submit
+* User name, email, website, password was inserted in the form.
+* After the user was created, a template was rendered.
+* There was also authentication logic, querying for user existence and checking password.
+
+* Users were not called in assets.py, which is more about static assets.
+* Users were not called in forms.py, but this file was used to create forms that would be used in auth.py.
+* Users were not called in routes.py, other than [current_user](https://flask-login.readthedocs.io/en/latest/#flask_login.current_user) which is a built-in function for flask-login.
+* Users were not called in routes.py, which is more about blueprints.
+
+#### Modifiying Auth.py and Routes
+
+* First thing I did, just to clean things up a bit, was to move the /login route to the top of the file, since that's really the, "first page" so to speak.
+* We have to modify the login function to check for user type, and then route the user to the appropriate page.
+* def signup() should be split into two functions, one for sponsor and one for editor.
+
+##### signup() split into sponsorsignup() and editorsignup()
+
+It seems that the most logical place to start is at the point where the user gets created, to be able to understand more about how the data is being inserted into the database.
+
+
+
+##### login() within auth.py
+
+* Check user_type
+* If user_type is shown to be sponsor, return one type of template, if editor, return another type of template.
+
+```
+    # Bypass if user is logged in
+    if current_user.is_authenticated:
+        return redirect(url_for('main_bp.dashboard'))"Log in with your User account."
+    )
+```
+
+Should send user to:
+
+* dashboard_sponsor.jinja2
+
+or
+
+* dashboard_editor.jinja2
+
+We will have different jinja2 templates for all various views being shown to different users.
+
+We can setup blueprints for different users which point to different template folders and static folers.  After adding the appropriate blueprints and dashboards, I modified the bypass code as follows:
+
+```
+    # Bypass if user is logged in
+    if current_user.is_authenticated:
+    	if current_user.
+	        return redirect(url_for('main_bp.dashboard'))"Log in with your User account."
+    	if current_user.
+	        return redirect(url_for('main_bp.dashboard'))"Log in with your User account."    		        
+    )
+```
+
+
+
+
+### Creating, Editing and Deleting Documents
+
+Creating documents appears to call for a completely new set of logic.
+
+If we look at this [Flask Blog Example Github Source Code](https://github.com/gouthambs/Flask-Blogging), we see that they have things architected as follows:
+
+#### Flask-Blogging Rough Outline
+
+* Blogging Engine Module (handles the blog storage, configuration, permissions, extension, configuration, user loaders, and calls other functions.)
+* Has a Post Processor (handles markdown extensions)
+* Uses SQLAStorage
+* Stores data in Google Cloud
+
+Basically, it isn't well-organized and there is not a lot of documentation regarding how it should be organized.
+
+However, the convention they seem to use is put a lot of processes into, "Blogging Engine."  We could likewise, create an, "Engine" however we might just call it a, "DocumentEngine," within engine.py.
+
 ## Logical Flows
 
 To create the logic behind what user can see which dashboard, I used [Lucid online flowcharts](https://lucid.app/documents#/dashboard).
@@ -1295,6 +1316,32 @@ To create the logic behind what user can see which dashboard, I used [Lucid onli
 ## Pages and Blueprints for Different User Types
 
 Above, we created a layout which helps us understand what kinds of users have what kinds of dashboards. We can start out with the, "Signup" functionality which now has one type of user, and create a setup which will allow links to two different types of users.
+
+### Adding Additional Blueprints
+
+I added a couple new blueprints for sponsors and editors in the routes.py file, where other blueprints were kept.
+
+```
+
+# Sponsor Blueprint
+sponsor_bp = Blueprint(
+    'sponsor_bp', __name__,
+    template_folder='templates_sponsors',
+    static_folder='static'
+)
+
+# Editor Blueprint
+editor_bp = Blueprint(
+    'editor_bp', __name__,
+    template_folder='templates_editors',
+    static_folder='static'
+)
+
+```
+
+Corresponding to these blueprints, I added folders and .jinja2 files within each folder into the project structure.
+
+I also deleted "home_bp" and all corresponding routes to avoid confusion, since this is not being used.
 
 ### Changing the Login Page - login.jinja2
 

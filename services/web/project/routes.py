@@ -11,24 +11,19 @@ main_bp = Blueprint(
     static_folder='static'
 )
 
-# Blueprint Configuration
-home_bp = Blueprint(
-    'home_bp', __name__,
-    template_folder='templates',
+# Sponsor Blueprint
+sponsor_bp = Blueprint(
+    'sponsor_bp', __name__,
+    template_folder='templates_sponsors',
     static_folder='static'
 )
 
-@home_bp.route('/', methods=['GET'])
-def home():
-    """Homepage."""
-    products = fetch_products(app)
-    return render_template(
-        'index.jinja2',
-        title='Flask Blueprint Demo',
-        subtitle='Demonstration of Flask blueprints in action.',
-        template='home-template',
-        products=products
-    )
+# Editor Blueprint
+editor_bp = Blueprint(
+    'editor_bp', __name__,
+    template_folder='templates_editors',
+    static_folder='static'
+)
 
 @main_bp.route('/', methods=['GET'])
 @login_required
