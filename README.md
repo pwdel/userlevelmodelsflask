@@ -1615,7 +1615,42 @@ We need to replace our redirect, which was sending to a page that didn't exist, 
 return redirect(url_for('sponsor_bp.dashboard_sponsor'))
 ```
 
-Besides this, we still have a query error.  [This StackOverflow Article](https://stackoverflow.com/questions/31578555/attributeerror-type-object-user-has-no-attribute-query) goes into 
+Besides this, we still have a query error.  [This StackOverflow Article](https://stackoverflow.com/questions/31578555/attributeerror-type-object-user-has-no-attribute-query) goes into the fact that UserMixin from flask-login does not have a query attribute.
+
+Further comments talk about how we need an option set within the declarative base, basically;
+
+```
+Base.query = session.query_property()
+```
+So that the flask-security module will be able to access user tables using the query.
+
+Hence in models.py we add:
+
+```
+Base = declarative_base(
+    Base.query = db_session.query_property()
+    )
+```
+
+* [What is UserMixin in flask-login?](https://stackoverflow.com/questions/63231163/what-is-usermixin-in-flask)
+
+> Flask-login requires a User model with the following properties:
+>    has an is_authenticated() method that returns True if the user has provided valid credentials
+>    has an is_active() method that returns True if the user’s account is active
+>    has an is_anonymous() method that returns True if the current user is an anonymous user
+>    has a get_id() method which, given a User instance, returns the unique ID for that object
+> UserMixin class provides the implementation of this properties. Its the reason you can call for example is_authenticated to check if login credentials provide is correct or not instead of having to write a method to do that yourself.
+
+[We can create our own User class which mimics UserMixin](https://stackoverflow.com/questions/31578555/attributeerror-type-object-user-has-no-attribute-query)
+
+We could also try adding our own function:
+
+```
+# user loader to implement query
+@login_manager.user_loader
+def get_user(ident):
+  return User.query.get(int(ident))
+```
 
 
 ## Creating, Editing and Deleting Documents

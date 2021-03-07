@@ -13,6 +13,12 @@ auth_bp = Blueprint(
     static_folder='static'
 )
 
+# user loader to implement query
+@login_manager.user_loader
+def get_user(ident):
+  return User.query.get(int(ident))
+
+
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     """
