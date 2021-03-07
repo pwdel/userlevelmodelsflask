@@ -8,9 +8,9 @@ from sqlalchemy.orm import relationship
 from sqlalchemy import Integer, ForeignKey, String, Column
 from sqlalchemy.ext.declarative import declarative_base
 
+Base = declarative_base()
 
-
-class User(UserMixin, db.Model):
+class User(Base, UserMixin):
     """User account model."""
 
     __tablename__ = 'users'
@@ -104,7 +104,7 @@ class User(UserMixin, db.Model):
 
 
 
-class Documents(db.Model):
+class Documents(Base):
     """Document model."""
     """Describes table which includes documents."""
 
@@ -139,7 +139,7 @@ class Documents(db.Model):
 
 
 
-class Retentions(db.Model):
+class Retentions(Base):
     """Model for who retains which document"""
     """Associate database."""
     __tablename__ = 'retentions'

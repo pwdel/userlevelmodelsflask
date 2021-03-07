@@ -1490,7 +1490,7 @@ Basically, ORM/Declarative is the more modern version of doing things, while Exp
 
 #### The Base Class
 
-db.Model, or as it gets defined, "Base Class." 
+db.Model, or as it gets defined, "Base Class,"  and appears to not have been created as a declarative base in our original code, we don't have anything calling out what db.Model is, in terms of it being declarative within models.py.
 
 Per [this tutorial](https://www.tutorialspoint.com/sqlalchemy/sqlalchemy_orm_declaring_mapping.htm),
 
@@ -1503,7 +1503,119 @@ Base = declarative_base()
 
 > Once base classis declared, any number of mapped classes can be defined in terms of it. Following code defines a Customer’s class. It contains the table to be mapped to, and names and datatypes of columns in it.
 
-> 
+
+Tutorials out there at least instruct using the following:
+
+```
+self.Model = self.make_declarative_base()
+```
+
+However, additional tutorials actually suggest using the function:
+
+```
+Base = declarative_base()
+```
+...and then substituting this for db.Model. The reason for this is presumably because, per [this StackOverflow Q&A ](https://stackoverflow.com/questions/22698478/what-is-the-difference-between-the-declarative-base-and-db-model), there are various options within the declarative_base() function which allow for things like; accessing query objects as Model.query rather than session.query(Model), computing table names, handling binds, etc.
+
+It also appears that we may need to feed in, "Base" first as:
+
+```
+class User(Base, UserMixin):
+```
+
+After making these changes, we run the code in docker.
+
+### User Query Error
+
+We now get a different error:
+
+```
+File "/usr/src/app/project/auth.py", line 59, in signup
+
+existing_user = User.query.filter_by(email=form.email.data).first()
+```
+
+Whereas previously we had a, "backreference" error, now we see an error in the signup form, which points to this code:
+
+```
+    form = SignupForm()
+    # validate if the user filled out the form correctly
+    # validate_on_submit is a built-in method
+    if form.validate_on_submit():
+        # make sure it's not an existing user
+        existing_user = User.query.filter_by(email=form.email.data).first()
+        if existing_user is None:
+            # create a new user
+            user = User(
+                name=form.name.data,
+                email=form.email.data,
+                website=form.website.data
+            )
+``` 
+I can see that our signup form is not valid, because it's asking for, "Website"
+
+I also note that the user type is not being set in auth.py. Whereas in forms.py we setup a new class 
+
+```
+class SignupFormSponsor(FlaskForm):
+```
+Now under auth.py, we don't seem to have a way to set the user_type.
+
+We could set up a seperate auth.py function and blueprint, but this seems like a lot of work, so it would be better to perhaps create a, "hidden" form and feed the data in from the page it's coming from.
+
+Then we could have this in our auth.py signup class:
+
+```
+            user = User(
+                name=form.name.data,
+                email=form.email.data,
+                organization=form.organization.data
+                user_type=form.organization.data
+            )
+```
+However, upon closer inspection, what seems to be happening is that we are being redirected to, /signup rather than:
+
+```
+@auth_bp.route('/signupsponsor', methods=['GET', 'POST'])
+def signupsponsor():
+```
+There seems to be a couple things happening in our logic:
+
+```
+@auth_bp.route('/signupsponsor', methods=['GET', 'POST'])
+def signupsponsor():
+    """
+    Sponsor sign-up page.
+
+    GET requests serve sign-up page.
+    POST requests validate form & user creation.
+    """
+    form = SignupFormSponsor()
+    # validate if the user filled out the form correctly
+    # validate_on_submit is a built-in method
+    if form.validate_on_submit():
+        # make sure it's not an existing user
+        existing_user = User.query.filter_by(email=form.email.data).first()
+        if existing_user is None:
+            # create a new user
+
+    # if form not validated, send back to signup form
+    return render_template(
+        'signup.jinja2',
+        title='Create an Account.',
+        form=form,
+        template='signup-page',
+        body="Sign up for a user account."
+    )
+```
+
+We need to replace our redirect, which was sending to a page that didn't exist, "sponsor_bp.dashboard" needs to be "sponsor_bp.dashboard_sponsor":
+
+```
+return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+```
+
+Besides this, we still have a query error.  [This StackOverflow Article](https://stackoverflow.com/questions/31578555/attributeerror-type-object-user-has-no-attribute-query) goes into 
 
 
 ## Creating, Editing and Deleting Documents

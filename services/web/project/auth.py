@@ -62,7 +62,7 @@ def signup():
             user = User(
                 name=form.name.data,
                 email=form.email.data,
-                website=form.website.data
+                organization=form.organization.data
             )
             # use our set_password method
             user.set_password(form.password.data)
@@ -111,7 +111,7 @@ def signupsponsor():
             db.session.commit()  # Create new user
             login_user(user)  # Log in as newly created user - from flask_login
             # if everything goes well, they will be redirected to the main application
-            return redirect(url_for('sponsor_bp.dashboard'))
+            return redirect(url_for('sponsor_bp.dashboard_sponsor'))
         flash('A user already exists with that email address.')
     return render_template(
         'signup.jinja2',
