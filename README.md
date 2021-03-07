@@ -1447,10 +1447,66 @@ We can setup blueprints for different users which point to different template fo
     )
 ```
 
+### Running Through SQLAlchemy Tutorial
+
+What we are following are the below resources:
+
+* [StackOverflow SQAlchemy Import Tables with Relationships](https://stackoverflow.com/questions/11046039/sqlalchemy-import-tables-with-relationships)
+* [SQLAlchemy Basic Application Template with Declarative Base](https://docs.pylonsproject.org/projects/pyramid_cookbook/en/latest/database/sqlalchemy.html#importing-all-sqlalchemy-models)
+* [Pointer to Declarative Base Tutorial](https://stackoverflow.com/questions/9088957/sqlalchemy-cannot-find-a-class-name)
+* [Declaring a Base Model in Flask-SQLAlchemy](https://stackoverflow.com/questions/22976445/how-do-i-declare-a-base-model-class-in-flask-sqlalchemy)
+* [Miguel Grinberg Mega Tutorial](https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-iv-database)
+* [SQLAlchemy Declaring and Mapping](](https://www.tutorialspoint.com/sqlalchemy/sqlalchemy_orm_declaring_mapping.htm)
+* [SQAlchemy Docs on Declarative Mapping](https://docs.sqlalchemy.org/en/14/orm/tutorial.html#declare-a-mapping)
 
 
+#### Object Relational Mapping (ORM)
 
-### Creating, Editing and Deleting Documents
+SQLAlchemy has something called the, "[Object Relational Mapper API](https://docs.sqlalchemy.org/en/14/orm/tutorial.html#declare-a-mapping)" which associates 
+
+1. User-defined Python classes with database tables
+2. Instances of those classes with rows in corresponding tables
+
+ORM is in contrast to, "SQLAlchemy Expression Language" represents the primitive constructs of a relational database directly without opinion. ORM presents a high level abstracted pattern of usage. Applications can be built with the ORM exclusively. ORM may make use of Expression Language on an as-needed basis.
+
+[A comparison of the different paradigms can be found here](https://enterprisecraftsmanship.com/posts/domain-centric-vs-data-centric-approaches/).
+
+Expression is Schema Centric:
+
+* Database is the center of everything
+* Application code is secondary to the data
+* Database structure modeled out first
+* Achieves code reuse by putting code close to the data, introduces common functionality in the database itself. More than one applciation querying the same data. You don't have to write API's.
+
+Expression language in SQLAlchemy basically allows Python to directly call SQL statements, and create more complex queries. It represents the more primitive constructs of the relational database.
+
+ORM is Domain Centric:
+
+* Creates API's in the application code using REST or SOAP.
+* Database not shared between applications
+* Microservices, external services
+
+Basically, ORM/Declarative is the more modern version of doing things, while Expression is closer to the hardware/database so to speak. 
+
+#### The Base Class
+
+db.Model, or as it gets defined, "Base Class." 
+
+Per [this tutorial](https://www.tutorialspoint.com/sqlalchemy/sqlalchemy_orm_declaring_mapping.htm),
+
+> A base class stores a catlog of classes and mapped tables in the Declarative system. This is called as the declarative base class. There will be usually just one instance of this base in a commonly imported module. The declarative_base() function is used to create base class. This function is defined in sqlalchemy.ext.declarative module.
+
+```
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
+```
+
+> Once base classis declared, any number of mapped classes can be defined in terms of it. Following code defines a Customer’s class. It contains the table to be mapped to, and names and datatypes of columns in it.
+
+> 
+
+
+## Creating, Editing and Deleting Documents
 
 Creating documents appears to call for a completely new set of logic.
 
