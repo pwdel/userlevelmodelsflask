@@ -1395,7 +1395,8 @@ Basically, it looks like the error is referring to this portion of the models.py
 Different troubleshooting guides online mention using a, "Base" model as an input in order for SQLAlchemy to work with relational databases.
 
 * [StackOverflow SQAlchemy Import Tables with Relationships](https://stackoverflow.com/questions/11046039/sqlalchemy-import-tables-with-relationships)
-* []
+* [SQLAlchemy Basic Application Template with Declarative Base](https://docs.pylonsproject.org/projects/pyramid_cookbook/en/latest/database/sqlalchemy.html#importing-all-sqlalchemy-models)
+* [Pointer to Declarative Base Tutorial](https://stackoverflow.com/questions/9088957/sqlalchemy-cannot-find-a-class-name)
 
 <hr>
 
@@ -1406,7 +1407,7 @@ Summary of Signup form Conversion for New Data Capture
 2. Configure blueprint and folder layout if needed to point to new webpage layouts and/or static css, js, etc.
 3. If necessary, modify or create a New python Function or Class to handle thew new part of the application you are working with.
 4. Modify the Custom Class call on the New Function for the part of the application you are working on to include the data you are looking for, for either automatic or manually recorded data. Make sure you pay attention to your data model to make sure the database has been updated.
-4. 
+5. Update Jinja2 Templates
 
 <hr>
 
