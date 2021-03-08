@@ -41,6 +41,8 @@ def create_app():
         # Register Blueprints
         app.register_blueprint(routes.main_bp)
         app.register_blueprint(auth.auth_bp)
+        app.register_blueprint(routes.sponsor_bp)
+        app.register_blueprint(routes.sponsor_bp)
 
         # import model class
         from . import models

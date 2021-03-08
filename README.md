@@ -1407,7 +1407,7 @@ Summary of Signup form Conversion for New Data Capture
 2. Configure blueprint and folder layout if needed to point to new webpage layouts and/or static css, js, etc.
 3. If necessary, modify or create a New python Function or Class to handle thew new part of the application you are working with.
 4. Modify the Custom Class call on the New Function for the part of the application you are working on to include the data you are looking for, for either automatic or manually recorded data. Make sure you pay attention to your data model to make sure the database has been updated.
-5. Update Jinja2 Templates
+5. Update Jinja2 Templates. Register new blueprints on __init__.py
 
 <hr>
 
@@ -1447,10 +1447,298 @@ We can setup blueprints for different users which point to different template fo
     )
 ```
 
+### Running Through SQLAlchemy Tutorial
+
+What we are following are the below resources:
+
+* [StackOverflow SQAlchemy Import Tables with Relationships](https://stackoverflow.com/questions/11046039/sqlalchemy-import-tables-with-relationships)
+* [SQLAlchemy Basic Application Template with Declarative Base](https://docs.pylonsproject.org/projects/pyramid_cookbook/en/latest/database/sqlalchemy.html#importing-all-sqlalchemy-models)
+* [Pointer to Declarative Base Tutorial](https://stackoverflow.com/questions/9088957/sqlalchemy-cannot-find-a-class-name)
+* [Declaring a Base Model in Flask-SQLAlchemy](https://stackoverflow.com/questions/22976445/how-do-i-declare-a-base-model-class-in-flask-sqlalchemy)
+* [Miguel Grinberg Mega Tutorial](https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-iv-database)
+* [SQLAlchemy Declaring and Mapping](](https://www.tutorialspoint.com/sqlalchemy/sqlalchemy_orm_declaring_mapping.htm)
+* [SQAlchemy Docs on Declarative Mapping](https://docs.sqlalchemy.org/en/14/orm/tutorial.html#declare-a-mapping)
+
+
+#### Object Relational Mapping (ORM)
+
+SQLAlchemy has something called the, "[Object Relational Mapper API](https://docs.sqlalchemy.org/en/14/orm/tutorial.html#declare-a-mapping)" which associates 
+
+1. User-defined Python classes with database tables
+2. Instances of those classes with rows in corresponding tables
+
+ORM is in contrast to, "SQLAlchemy Expression Language" represents the primitive constructs of a relational database directly without opinion. ORM presents a high level abstracted pattern of usage. Applications can be built with the ORM exclusively. ORM may make use of Expression Language on an as-needed basis.
+
+[A comparison of the different paradigms can be found here](https://enterprisecraftsmanship.com/posts/domain-centric-vs-data-centric-approaches/).
+
+Expression is Schema Centric:
+
+* Database is the center of everything
+* Application code is secondary to the data
+* Database structure modeled out first
+* Achieves code reuse by putting code close to the data, introduces common functionality in the database itself. More than one applciation querying the same data. You don't have to write API's.
+
+Expression language in SQLAlchemy basically allows Python to directly call SQL statements, and create more complex queries. It represents the more primitive constructs of the relational database.
+
+ORM is Domain Centric:
+
+* Creates API's in the application code using REST or SOAP.
+* Database not shared between applications
+* Microservices, external services
+
+Basically, ORM/Declarative is the more modern version of doing things, while Expression is closer to the hardware/database so to speak. 
+
+#### The Base Class
+
+db.Model, or as it gets defined, "Base Class,"  and appears to not have been created as a declarative base in our original code, we don't have anything calling out what db.Model is, in terms of it being declarative within models.py.
+
+Per [this tutorial](https://www.tutorialspoint.com/sqlalchemy/sqlalchemy_orm_declaring_mapping.htm),
+
+> A base class stores a catlog of classes and mapped tables in the Declarative system. This is called as the declarative base class. There will be usually just one instance of this base in a commonly imported module. The declarative_base() function is used to create base class. This function is defined in sqlalchemy.ext.declarative module.
+
+```
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
+```
+
+> Once base classis declared, any number of mapped classes can be defined in terms of it. Following code defines a Customer’s class. It contains the table to be mapped to, and names and datatypes of columns in it.
+
+
+Tutorials out there at least instruct using the following:
+
+```
+self.Model = self.make_declarative_base()
+```
+
+However, additional tutorials actually suggest using the function:
+
+```
+Base = declarative_base()
+```
+...and then substituting this for db.Model. The reason for this is presumably because, per [this StackOverflow Q&A ](https://stackoverflow.com/questions/22698478/what-is-the-difference-between-the-declarative-base-and-db-model), there are various options within the declarative_base() function which allow for things like; accessing query objects as Model.query rather than session.query(Model), computing table names, handling binds, etc.
+
+It also appears that we may need to feed in, "Base" first as:
+
+```
+class User(Base, UserMixin):
+```
+
+After making these changes, we run the code in docker.
+
+### User Query Error
+
+We now get a different error:
+
+```
+File "/usr/src/app/project/auth.py", line 59, in signup
+
+existing_user = User.query.filter_by(email=form.email.data).first()
+```
+
+Whereas previously we had a, "backreference" error, now we see an error in the signup form, which points to this code:
+
+```
+    form = SignupForm()
+    # validate if the user filled out the form correctly
+    # validate_on_submit is a built-in method
+    if form.validate_on_submit():
+        # make sure it's not an existing user
+        existing_user = User.query.filter_by(email=form.email.data).first()
+        if existing_user is None:
+            # create a new user
+            user = User(
+                name=form.name.data,
+                email=form.email.data,
+                website=form.website.data
+            )
+``` 
+I can see that our signup form is not valid, because it's asking for, "Website"
+
+I also note that the user type is not being set in auth.py. Whereas in forms.py we setup a new class 
+
+```
+class SignupFormSponsor(FlaskForm):
+```
+Now under auth.py, we don't seem to have a way to set the user_type.
+
+We could set up a seperate auth.py function and blueprint, but this seems like a lot of work, so it would be better to perhaps create a, "hidden" form and feed the data in from the page it's coming from.
+
+Then we could have this in our auth.py signup class:
+
+```
+            user = User(
+                name=form.name.data,
+                email=form.email.data,
+                organization=form.organization.data
+                user_type=form.organization.data
+            )
+```
+However, upon closer inspection, what seems to be happening is that we are being redirected to, /signup rather than:
+
+```
+@auth_bp.route('/signupsponsor', methods=['GET', 'POST'])
+def signupsponsor():
+```
+There seems to be a couple things happening in our logic:
+
+```
+@auth_bp.route('/signupsponsor', methods=['GET', 'POST'])
+def signupsponsor():
+    """
+    Sponsor sign-up page.
+
+    GET requests serve sign-up page.
+    POST requests validate form & user creation.
+    """
+    form = SignupFormSponsor()
+    # validate if the user filled out the form correctly
+    # validate_on_submit is a built-in method
+    if form.validate_on_submit():
+        # make sure it's not an existing user
+        existing_user = User.query.filter_by(email=form.email.data).first()
+        if existing_user is None:
+            # create a new user
+
+    # if form not validated, send back to signup form
+    return render_template(
+        'signup.jinja2',
+        title='Create an Account.',
+        form=form,
+        template='signup-page',
+        body="Sign up for a user account."
+    )
+```
+
+We need to replace our redirect, which was sending to a page that didn't exist, "sponsor_bp.dashboard" needs to be "sponsor_bp.dashboard_sponsor":
+
+```
+return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+```
+
+Besides this, we still have a query error.  [This StackOverflow Article](https://stackoverflow.com/questions/31578555/attributeerror-type-object-user-has-no-attribute-query) goes into the fact that UserMixin from flask-login does not have a query attribute.
+
+Further comments talk about how we need an option set within the declarative base, basically;
+
+```
+Base.query = session.query_property()
+```
+So that the flask-security module will be able to access user tables using the query.
+
+Hence in models.py we add:
+
+```
+Base = declarative_base(
+    Base.query = db_session.query_property()
+    )
+```
+
+* [What is UserMixin in flask-login?](https://stackoverflow.com/questions/63231163/what-is-usermixin-in-flask)
+
+> Flask-login requires a User model with the following properties:
+>    has an is_authenticated() method that returns True if the user has provided valid credentials
+>    has an is_active() method that returns True if the user’s account is active
+>    has an is_anonymous() method that returns True if the current user is an anonymous user
+>    has a get_id() method which, given a User instance, returns the unique ID for that object
+> UserMixin class provides the implementation of this properties. Its the reason you can call for example is_authenticated to check if login credentials provide is correct or not instead of having to write a method to do that yourself.
+
+[We can create our own User class which mimics UserMixin](https://stackoverflow.com/questions/31578555/attributeerror-type-object-user-has-no-attribute-query)
+
+We could also try adding our own function:
+
+```
+# user loader to implement query
+@login_manager.user_loader
+def get_user(ident):
+  return User.query.get(int(ident))
+```
+If we look at the error we are being given, we see that the error is being thrown in the "signup" function, so we take this out:
+
+```
+@auth_bp.route('/signup', methods=['GET', 'POST'])
+def signup():
+    """
+    User sign-up page.
+
+    GET requests serve sign-up page.
+    POST requests validate form & user creation.
+    """
+    form = SignupForm()
+    # validate if the user filled out the form correctly
+    # validate_on_submit is a built-in method
+    if form.validate_on_submit():
+        # make sure it's not an existing user
+        existing_user = User.query.filter_by(email=form.email.data).first()
+        if existing_user is None:
+            # create a new user
+            user = User(
+                name=form.name.data,
+                email=form.email.data,
+                organization=form.organization.data
+            )
+            # use our set_password method
+            user.set_password(form.password.data)
+            # commit our new user record and log the user in
+            db.session.add(user)
+            db.session.commit()  # Create new user
+            login_user(user)  # Log in as newly created user - from flask_login
+            # if everything goes well, they will be redirected to the main application
+            return redirect(url_for('main_bp.dashboard'))
+        flash('A user already exists with that email address.')
+    return render_template(
+        'signup.jinja2',
+        title='Create an Account.',
+        form=form,
+        template='signup-page',
+        body="Sign up for a user account."
+    )
+```
+Once we take that out, we get re-directed to the /signup page, which now no longer exists.
+
+After playing around with this for a while, I realize that it's necessary to go back and look at the __init__.py file to see what else we might be missing.
+
+* Of course, any time we add new bluepritns, we need to, "register" them.  This gets added to __init__.py
+
+```
+    # initialize login manager plugin
+    login_manager.init_app(app)
+    with app.app_context():
+        from . import routes
+        from . import auth
+        from .assets import compile_static_assets
+        # Register Blueprints
+        app.register_blueprint(routes.main_bp)
+        app.register_blueprint(auth.auth_bp)
+        app.register_blueprint(routes.sponsor_bp)
+        app.register_blueprint(routes.sponsor_bp)
+
+```
+After doing this, rather than getting a 404 error, we get a, "sponsor_bp" is not defined from the auth.py file.  This just means we need to add that blueprint within auth.py or import it.
+
+We try importing with:
+
+```
+from .routes import sponsor_bp, editor_bp
+```
+After this, and upon pinging, "http://localhost:5000/signupsponsor" - we are now shown the expected signupsponsor form.
+
+Of course after we fill out the form, we are still redirected back to "/signup".  Why are we being redirected here?  Where in the entire codebase does this even exist anymore?
+
+Basically, the expected behavior is that we should be redirected to:
+
+```
+return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+```
+However, what is happening is that we are getting re-directed back to /signup. So basically, we're not being validated upon submission within the signup form. Rather, flask-wtf validate-on-submit is not being executed.
+
+Per this Stackexchange; [Flask-WTF validate_on_submit is never executed](https://stackoverflow.com/questions/10722968/flask-wtf-validate-on-submit-is-never-executed):
+
+> You're not inserting the CSRF field in the HTML form.
+
+[CRSF Token](https://flask-wtf.readthedocs.io/en/latest/quickstart.html#creating-forms)
 
 
 
-### Creating, Editing and Deleting Documents
+## Creating, Editing and Deleting Documents
 
 Creating documents appears to call for a completely new set of logic.
 
