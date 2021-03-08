@@ -1407,7 +1407,7 @@ Summary of Signup form Conversion for New Data Capture
 2. Configure blueprint and folder layout if needed to point to new webpage layouts and/or static css, js, etc.
 3. If necessary, modify or create a New python Function or Class to handle thew new part of the application you are working with.
 4. Modify the Custom Class call on the New Function for the part of the application you are working on to include the data you are looking for, for either automatic or manually recorded data. Make sure you pay attention to your data model to make sure the database has been updated.
-5. Update Jinja2 Templates
+5. Update Jinja2 Templates. Register new blueprints on __init__.py
 
 <hr>
 
@@ -1651,6 +1651,91 @@ We could also try adding our own function:
 def get_user(ident):
   return User.query.get(int(ident))
 ```
+If we look at the error we are being given, we see that the error is being thrown in the "signup" function, so we take this out:
+
+```
+@auth_bp.route('/signup', methods=['GET', 'POST'])
+def signup():
+    """
+    User sign-up page.
+
+    GET requests serve sign-up page.
+    POST requests validate form & user creation.
+    """
+    form = SignupForm()
+    # validate if the user filled out the form correctly
+    # validate_on_submit is a built-in method
+    if form.validate_on_submit():
+        # make sure it's not an existing user
+        existing_user = User.query.filter_by(email=form.email.data).first()
+        if existing_user is None:
+            # create a new user
+            user = User(
+                name=form.name.data,
+                email=form.email.data,
+                organization=form.organization.data
+            )
+            # use our set_password method
+            user.set_password(form.password.data)
+            # commit our new user record and log the user in
+            db.session.add(user)
+            db.session.commit()  # Create new user
+            login_user(user)  # Log in as newly created user - from flask_login
+            # if everything goes well, they will be redirected to the main application
+            return redirect(url_for('main_bp.dashboard'))
+        flash('A user already exists with that email address.')
+    return render_template(
+        'signup.jinja2',
+        title='Create an Account.',
+        form=form,
+        template='signup-page',
+        body="Sign up for a user account."
+    )
+```
+Once we take that out, we get re-directed to the /signup page, which now no longer exists.
+
+After playing around with this for a while, I realize that it's necessary to go back and look at the __init__.py file to see what else we might be missing.
+
+* Of course, any time we add new bluepritns, we need to, "register" them.  This gets added to __init__.py
+
+```
+    # initialize login manager plugin
+    login_manager.init_app(app)
+    with app.app_context():
+        from . import routes
+        from . import auth
+        from .assets import compile_static_assets
+        # Register Blueprints
+        app.register_blueprint(routes.main_bp)
+        app.register_blueprint(auth.auth_bp)
+        app.register_blueprint(routes.sponsor_bp)
+        app.register_blueprint(routes.sponsor_bp)
+
+```
+After doing this, rather than getting a 404 error, we get a, "sponsor_bp" is not defined from the auth.py file.  This just means we need to add that blueprint within auth.py or import it.
+
+We try importing with:
+
+```
+from .routes import sponsor_bp, editor_bp
+```
+After this, and upon pinging, "http://localhost:5000/signupsponsor" - we are now shown the expected signupsponsor form.
+
+Of course after we fill out the form, we are still redirected back to "/signup".  Why are we being redirected here?  Where in the entire codebase does this even exist anymore?
+
+Basically, the expected behavior is that we should be redirected to:
+
+```
+return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+```
+However, what is happening is that we are getting re-directed back to /signup. So basically, we're not being validated upon submission within the signup form. Rather, flask-wtf validate-on-submit is not being executed.
+
+Per this Stackexchange; [Flask-WTF validate_on_submit is never executed](https://stackoverflow.com/questions/10722968/flask-wtf-validate-on-submit-is-never-executed):
+
+> You're not inserting the CSRF field in the HTML form.
+
+[CRSF Token](https://flask-wtf.readthedocs.io/en/latest/quickstart.html#creating-forms)
+
 
 
 ## Creating, Editing and Deleting Documents

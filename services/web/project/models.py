@@ -14,7 +14,7 @@ Base = declarative_base()
 
 
 
-class User(Base):
+class User(UserMixin,Base):
     """User account model."""
 
     __tablename__ = 'users'
