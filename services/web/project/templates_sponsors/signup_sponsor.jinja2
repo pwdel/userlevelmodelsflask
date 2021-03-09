@@ -6,7 +6,7 @@
 
     <div class="logo">
       <img
-        src="{{ url_for('static', filename='dist/img/logo.png') }}"
+        src="{{ url_for('static', filename='dist/img/linguo.jpg') }}"
         alt="logo"
       />
     </div>
@@ -23,7 +23,7 @@
       </div>
     {% endfor %}
 
-    <h1>Sign Up</h1>
+    <h1>Sponsor Sign Up</h1>
 
     <form method="POST" action="/signupsponsor">
       {{ form.csrf_token }}
@@ -89,6 +89,12 @@
         <a href="{{ url_for('auth_bp.login') }}">Log in.</a>
       </div>
     </div>
+    <div class="login-signup">
+      <div>
+        <span>Need to Register as an Editor?</span>
+        <a href="">Sign Up.</a>
+      </div>
+    </div>    
   </div>
 
 {% endblock %}

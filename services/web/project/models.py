@@ -11,10 +11,9 @@ from sqlalchemy.orm import sessionmaker
 
 
 Base = declarative_base()
+Base.query = Session.query_property()
 
-
-
-class User(UserMixin,Base):
+class User(Base):
     """User account model."""
 
     __tablename__ = 'users'
@@ -102,6 +101,23 @@ class User(UserMixin,Base):
                 return redirect(url_for('index'))
 
         return wrap
+
+    #-----login requirements-----
+    def is_active(self):
+    #all users are active
+        return True 
+
+    def get_id(self):
+        # returns the user e-mail. not sure who calls this
+        return self.email
+
+    def is_authenticated(self):
+        return self.authenticated
+
+    def is_anonymous(self):
+        # False as we do not support annonymity
+        return False
+
 
     def __repr__(self):
         return '<User {}>'.format(self.username)

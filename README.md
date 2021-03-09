@@ -1736,6 +1736,157 @@ Per this Stackexchange; [Flask-WTF validate_on_submit is never executed](https:/
 
 [CRSF Token](https://flask-wtf.readthedocs.io/en/latest/quickstart.html#creating-forms)
 
+If we look on our .jinja2 files,
+
+signup.jinja2
+
+```
+    <form method="POST" action="/signup">
+      {{ form.csrf_token }}
+```
+signup_sponsor.jinja2
+
+```
+    <form method="POST" action="/signupsponsor">
+      {{ form.csrf_token }}
+```
+So we are doing this, exactly as the documents suggest.
+
+After doing some work re-arranging blueprints and working with the auth.py, routes,py as well as jinja files, it appears that after sponsor signup, we are now re-directed to, "/signupsponsor" but we still get the attributeerror in that User has no attribute Query.
+
+So, it appears that we do indeed need to make a custom validator.
+
+### Creating a Custom Login Validator
+
+#### Current Login Validator
+
+Note - this gets bypassed if current user is already validated. We always get sent here as a check-in.
+
+This is getting bypassed with an error because there is no, "user = User.query.filter_by(email=form.email.data).first()"
+
+```
+@auth_bp.route('/login', methods=['GET', 'POST'])
+def login():
+    """
+    Log-in page for registered users.
+
+    GET requests serve Log-in page.
+    POST requests validate and redirect user to dashboard.
+    """
+    # Bypass if user is logged in
+    if current_user.is_authenticated:
+        return redirect(url_for('main_bp.dashboard'))
+
+    form = LoginForm()
+    # Validate login attempt
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user and user.check_password(password=form.password.data):
+            login_user(user)
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('main_bp.dashboard'))
+        flash('Invalid username/password combination')
+        return redirect(url_for('auth_bp.login'))
+    return render_template(
+        'login.jinja2',
+        form=form,
+        title='Log in.',
+        template='login-page',
+        body="Log in with your User account."
+    )
+
+```
+
+Basically:
+
+```
+user = User.query.filter_by(email=form.email.data).first()
+```
+
+Is from SqlAlchemy, whereas our User class uses "UserMixin" from flask-login [source](https://flask-login.readthedocs.io/en/latest/_modules/flask_login/mixins.html#UserMixin). 
+
+#### Custom Login Validator
+
+Rough Sketch
+
+```
+
+class User(db.Model):
+    id = db.Column(db.Integer,primary_key=True)
+    email = db.Column(db.Unicode(128))
+    name = db.Column(db.Unicode(128))
+    password = db.Column(db.Unicode(1024))
+    authenticated = db.Column(db.Boolean, default=False)
+    posts = db.relationship('Post')
+    #-----login requirements-----
+    def is_active(self):
+    #all users are active
+        return True 
+
+    def get_id(self):
+        # returns the user e-mail. not sure who calls this
+        return self.email
+
+    def is_authenticated(self):
+        return self.authenticated
+
+    def is_anonymous(self):
+        # False as we do not support annonymity
+        return False
+
+    #constructor
+    def __init__(self, name=None, email=None, password=None):
+        self.name = name
+        self.email = email
+        self.password = password
+        self.authenticated = True
+```
+
+We start out by adding to our current user class:
+
+```
+    #-----login requirements-----
+    def is_active(self):
+    #all users are active
+        return True 
+
+    def get_id(self):
+        # returns the user e-mail. not sure who calls this
+        return self.email
+
+    def is_authenticated(self):
+        return self.authenticated
+
+    def is_anonymous(self):
+        # False as we do not support annonymity
+        return False
+```
+
+Keep in mind, we are having the User class inherit from "Base" now - "class User(Base):" - the declarative base, from SQAlchemy.
+
+So, the User Class from SQLAlchemy does not have the query property.
+
+As attempted above, we can add:
+
+```
+Base.query = db_session.query_property()
+```
+
+However now we don't have db_session and we get an error:
+
+```
+flask  | NameError: name 'db_session' is not defined
+
+```
+
+There seems to be more documentation about this specific, "query_property()" here:
+
+* [SQLAlchemy 13 ORM Scoping Scoped Session Query Property](https://docs.sqlalchemy.org/en/13/orm/contextual.html?highlight=query_property#sqlalchemy.orm.scoping.scoped_session.query_property)
+* [SQLAlchemy 14 Query API](https://docs.sqlalchemy.org/en/14/orm/query.html)
+
+We are likely using SQLAlchemy version 13.
+
+
 
 
 ## Creating, Editing and Deleting Documents
