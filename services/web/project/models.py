@@ -59,12 +59,11 @@ class User(db.Model):
         nullable=True
     )
 
-    """Backreference to Document class on retentions associate table."""
-    documents = db.relationship(
-        'Document', 
-        secondary='retentions', 
-        back_populates='users'
+    """backreferences User class on retentions table"""    
+    retentions = db.relationship(
+
         )
+
 
     def set_password(self, password):
         """Create hashed password."""
@@ -99,29 +98,12 @@ class User(db.Model):
 
         return wrap
 
-    #-----login requirements-----
-    def is_active(self):
-    #all users are active
-        return True 
-
-    def get_id(self):
-        # returns the user e-mail. not sure who calls this
-        return self.email
-
-    def is_authenticated(self):
-        return self.authenticated
-
-    def is_anonymous(self):
-        # False as we do not support annonymity
-        return False
-
-
     def __repr__(self):
         return '<User {}>'.format(self.username)
 
 
 
-class Documents(db.Model):
+class Document(db.Model):
     """Document model."""
     """Describes table which includes documents."""
 
@@ -146,13 +128,28 @@ class Documents(db.Model):
         unique=False,
         nullable=True
     )
-
     """backreferences User class on retentions table"""
-    users = db.relationship(
-        'User', 
-        secondary='retentions', 
-        back_populates='documents'
+
+
+
+retention_table = Table(
+    'retention', 
+    db.Model.metadata,
+    Column('left_id', 
+        Integer, 
+        ForeignKey('left.id')
+        ),
+    Column('right_id', 
+        Integer, 
+        ForeignKey('right.id')
         )
+)
+
+
+
+
+
+
 
 
 

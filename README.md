@@ -1899,6 +1899,9 @@ We are using, [Flask-SQLAlchemy==2.4.1](https://flask-sqlalchemy.palletsprojects
 3. [ReRead the SQLAlchemy Tutorial from Hackers and Slackers](https://hackersandslackers.com/flask-sqlalchemy-database-models)
 4. [Use Flask and SQLalchemy, not Flask-SQLAlchemy!](https://towardsdatascience.com/use-flask-and-sqlalchemy-not-flask-sqlalchemy-5a64fafe22a4)
 5. [Flask SQL Alchemy Tutorial](https://www.youtube.com/watch?v=cYWiDiIUxQc)
+6. [Relationship() function documentation](https://docs.sqlalchemy.org/en/14/orm/relationship_api.html#sqlalchemy.orm.relationship)
+7. [Building a Relationship Tutorial](https://docs.sqlalchemy.org/en/14/orm/tutorial.html#building-a-relationship)
+8. [Object Relational Tutorial](https://docs.sqlalchemy.org/en/14/orm/tutorial.html#object-relational-tutorial-1-x-api)
 
 ##### Initial Fix Attempts:
 
@@ -1955,7 +1958,8 @@ User.query.all()
 
 The tutorial goes on to talk about accepting keyword arguments for all columns and relationships.
 
-> Note how we never defined a __init__ method on the User class? That’s because SQLAlchemy adds an implicit constructor to all model classes which accepts keyword arguments for all its columns and relationships. If you decide to override the constructor for any reason, make sure to keep accepting **kwargs and call the super constructor with those **kwargs to preserve this behavior:
+> Note how we never defined a __init__ method on the User class? That’s because SQLAlchemy adds an implicit constructor to all model classes which accepts keyword arguments for all its columns and relationships. If you decide to override the constructor for any reason, make sure to keep accepting kwargs and call the super constructor with those kwargs to preserve this behavior
+
 
 
 Once we updated our model, we get a new error:
@@ -2009,21 +2013,279 @@ You can define lazy status for backrefs right in the backref()
 There is then an example given for many-to-many relationships.
 
 ```
-tags = db.Table('tags',
-    db.Column('tag_id', db.Integer, db.ForeignKey('tag.id'), primary_key=True),
-    db.Column('page_id', db.Integer, db.ForeignKey('page.id'), primary_key=True)
+tags = db.Table(
+    'tags',
+
+    db.Column(
+        'tag_id', db.Integer, 
+        db.ForeignKey('tag.id'), 
+        primary_key=True
+        ),
+
+    db.Column(
+        'page_id', 
+        db.Integer, 
+        db.ForeignKey('page.id'), 
+        primary_key=True
+        )
 )
 
 class Page(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    tags = db.relationship('Tag', secondary=tags, lazy='subquery',
-        backref=db.backref('pages', lazy=True))
+    id = db.Column(
+        db.Integer, 
+        primary_key=True
+        )
+
+    tags = db.relationship(
+        'Tag', 
+        secondary=tags, 
+        lazy='subquery',
+
+        backref=db.backref(
+            'pages', 
+            lazy=True
+            )
+
+        )
 
 class Tag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 ```
 
 Notably, this example above does not include a class for "tags" as a database, but it does include a class for, "Tag."
+
+Looking at our [Database Sketch](https://github.com/pwdel/userlevelmodelsflask/blob/main/readme_img/finaldatabase.png) we should question what do we really need within each class to make this work.
+
+Above we have Page and Tag, whereas our database has User and Document.
+
+Look at the documentation for the [Relationship function](https://docs.sqlalchemy.org/en/14/orm/relationship_api.html#sqlalchemy.orm.relationship).
+
+Typical relationship using declarative mapping in SQLAlchemy:
+
+```
+class Parent(Base):
+    __tablename__ = 'parent'
+    id = Column(Integer, primary_key=True)
+    children = relationship(
+        "Child", 
+        order_by="Child.id"
+        )
+```
+
+Beyond this, there are different sections on usage of flask-sqlalchemy as shown below:
+
+* [Select, Insert, Delete, Query](https://flask-sqlalchemy.palletsprojects.com/en/2.x/queries/)
+* [Multiple Databases with Binds](https://flask-sqlalchemy.palletsprojects.com/en/2.x/binds/)
+* [Track Modifications to Database](https://flask-sqlalchemy.palletsprojects.com/en/2.x/signals/)
+
+* [Customizing](https://flask-sqlalchemy.palletsprojects.com/en/2.x/customizing/)
+A couple interesting notes about customization:
+
+Model Mixins - these are for if behavior is only needed on some models rather than all models. mixin classes customize only those models. For example, if some models track when they are created or updated.
+
+The, "UserMixin" however provides default implementations that Flask-Login expects user objects to have.  This includes:
+
+```
+
+    @property
+    def is_active(self):
+        return True
+
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+```
+    
+However we might be able to add these (and anything else needed), manually.
+
+* [API Documentation](https://flask-sqlalchemy.palletsprojects.com/en/2.x/api/)
+
+Next on the reading list:
+
+2. [Read the SQL Alchemy Current Release Documentation](https://docs.sqlalchemy.org/en/13/).  We can assume we are on the current release until we know different.
+6. [Relationship() function documentation](https://docs.sqlalchemy.org/en/14/orm/relationship_api.html#sqlalchemy.orm.relationship)
+7. [Building a Relationship Tutorial](https://docs.sqlalchemy.org/en/14/orm/tutorial.html#building-a-relationship)
+8. [Object Relational Tutorial](https://docs.sqlalchemy.org/en/14/orm/tutorial.html#object-relational-tutorial-1-x-api)
+
+##### SQLAlchemy Current Release Documentation
+
+2. [Read the SQL Alchemy Current Release Documentation](https://docs.sqlalchemy.org/en/13/).  We can assume we 
+
+* Notes on SQLAlchemy philosophy - basically, treating a database like a bunch of algebra rather than a bunch of tables, and having an Object Relational Mapper (ORM), an optional component that provides a data mapper pattern, where classes can be mapped to the database in open ended, multiple ways. The object model and database schema can be decoupled from the beginning.
+
+**Getting Started** basically talks about how SQLAlchemy is a collection different components which can optionally be used including an ORM, and a Core, which includes schema/types, SQL Expression language, Engine, Connection Pooling and Dialects (for different database types), as well as a Database API.
+
+**The SQLAlchemy ORM** goes directly into the ORM Tutorial, linked to below.
+
+**SQLAlchemy Core** goes directly into the Expression Language Tutorial, linked below.
+
+[Dialect Documentation for Postgres](https://docs.sqlalchemy.org/en/13/dialects/postgresql.html)
+
+
+##### Object Relational Tutorial
+
+[Object Relational Tutorial](https://docs.sqlalchemy.org/en/14/orm/tutorial.html#object-relational-tutorial-1-x-api)
+
+>The SQLAlchemy Object Relational Mapper presents a method of associating user-defined Python classes with database tables, and instances of those classes (objects) with rows in their corresponding tables.
+
+* First we set up an engine, which is already covered in the flask-sqlalchemy module.
+* Mapping delcaration is also covered in flask-sqlalchemy
+* "Creating a schema" goes through and hels explain the reason why our schemas are written the way they are in model.py. However, the actual creation of the schema itself with User.__table__ is covered in flask-sqlalchemy.
+* The standard way of creating a class which describes a table is shown.
+* "Creating an Instance" shows how you can use the python console to insert data by ClassName(info='info')
+* "Creating a Session" is covered by flask-sqlalchemy
+* "Session" means, an object is sitting in the environment, it sits in the session but has not been committed to SQL. You can use session.add(data_point) to put that datapoint into a session without writing it to SQL. Once you want to commit that data you can use, session.commit().
+* "Rollback" is like, "undo" for a session, you can roll back a piece of data before committing it.
+* **Querying** Query objects are created using query() on Session. So basically you can do: session.query(User.id) to load User instances.
+* Query can also use ORM-instrumented descriptors as arguments, such as session.query(User.name, User.id)
+* Query can also be used with filter by doing: query.filter(User.name == 'ed') to filter anyone named ed, for example.
+* Query can also be used to return a whole list of something, such as with Query.all()
+* text() can be used to filter for literals, such as filter(text("id<244")) to get all id's lower than a particular number. Parameters can be bundled.
+* Counting can be done with Query.count() to determine the number of rows a particular SQL statment would return.
+* [Building a Relationship](https://docs.sqlalchemy.org/en/13/orm/tutorial.html#building-a-relationship) seems to be a more critical section that we should dedicate its own section to below.
+
+##### Building a Relationship Tutorial
+
+[Building a Relationship Tutorial](https://docs.sqlalchemy.org/en/13/orm/tutorial.html#building-a-relationship)
+
+* Within the tutorial, out a second table called, "Address".  This implies a basic one to many relationship.
+
+```
+class Address(Base):
+     __tablename__ = 'addresses'
+     id = Column(Integer, primary_key=True)
+     email_address = Column(String, nullable=False)
+     user_id = Column(Integer, ForeignKey('users.id'))
+
+     user = relationship(
+        "User", 
+        back_populates="addresses"
+        )
+
+     def __repr__(self):
+         return "<Address(email_address='%s')>" % self.email_address
+
+
+User.addresses = relationship(
+    "Address", 
+    order_by=Address.id, 
+    back_populates="user"
+    )
+
+```
+* The ForeignKey construct is a directive applied to Column that indicates that the values shold be constrained to be values in the named remote column.  So basically, user_id in Address must be taken from users.id from the User table.
+* relationship() tells the Object Relationship Map that the "user" column in the Address table should be linked to the User class, backpopulating to the tablename "addresses"
+
+Foreignkey relationships between the two tables determine the nature of the linkage. The fact that Address has a ForeignKey tells us that it will be the, "many" to the, "one" of users.
+
+* The relationship.back_populates is assigned to back-populate in both directions.
+* relationship() is making a decision about what's happening based upon how we place the relationship() function and the back_populate options.
+* [backref](https://docs.sqlalchemy.org/en/13/orm/backref.html#relationships-backref) is for linking competing relationships such as Address.user and User.addresses.  This is a [bidirectional relationship](https://docs.sqlalchemy.org/en/13/glossary.html#term-bidirectional-relationship), which means two robjects can be mutually associated with each other. This can be applied to any relationship.
+
+
+##### Linking Relationships with Backref
+
+What does Backref do?
+
+* [Linking Relationships with Backref](https://docs.sqlalchemy.org/en/13/orm/backref.html#relationships-backref) goes into more detail on usage of Backref.
+
+We are presented with the following example:
+
+```
+class User(Base):
+    __tablename__ = 'user'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+    addresses = relationship("Address", backref="user")
+
+class Address(Base):
+    __tablename__ = 'address'
+    id = Column(Integer, primary_key=True)
+    email = Column(String)
+    user_id = Column(Integer, ForeignKey('user.id'))
+```
+
+relationship.backref is a common shortcut for placing a second relationship() into the address mapping. The equivalent to the above "addresses" would be:
+
+```
+# User Class
+addresses = relationship("Address", back_populates="user")
+
+# Address Class
+user = relationship("User", back_populates="addresses")
+
+```
+So basically, rather than putting a relationship() function under both the User and Address class pointing to each other, we put one relationship() function under User and backref it to "addresses".  The second example is, "explicitly" telling each relationship about the other one.
+
+backref() is not merely a shortcut for relationship() it means that certain behavior will change, meaning that configurational arguments apply in both directions rather than in one direction.
+
+Many-to-many relationships have a [relationship.secondary argument](https://docs.sqlalchemy.org/en/13/orm/relationship_api.html#sqlalchemy.orm.relationship.params.secondary), which specifies an intermediary table, which is usually an instance of [Table].(https://docs.sqlalchemy.org/en/13/core/metadata.html#sqlalchemy.schema.Table)
+
+There is basically the ability to run backref arguments inside of each other, as a string, in order to apply options in one direction.  They can also be cascaded.
+
+##### Relationship Function Documentation
+
+6. [Relationship() function documentation](https://docs.sqlalchemy.org/en/14/orm/relationship_api.html#sqlalchemy.orm.relationship)
+
+```
+class Parent(Base):
+    __tablename__ = 'parent'
+    id = Column(Integer, primary_key=True)
+    children = relationship("Child", order_by="Child.id")
+```
+* argument - is the target of the relationship.  It basically feeds into a function called, "[Mapper](https://docs.sqlalchemy.org/en/14/orm/mapping_api.html#sqlalchemy.orm.Mapper)" which links a user defined class with table metadata.
+* secondary is used in many-to-many relationships and specifies the intermediary table.
+* active_history=False indicates that the many-to-one reference should be loaded if not already loaded.
+* backref - discussed above, indicates the relationship in the other direction.
+* back_populates takes a string name, but the complementary property is not created automatically, and must be configured explicitly on the mapper.
+* overlaps - eliminates warnings of conflicts
+* bake_queries - caches the construction of SQL in lazyloads.
+* cascade - comma seperated cascade rules.
+* foreign_keys - a list of columns to be used as foriegn key columns.  Most cases this is not required as it is done automatically.
+
+(and lots of other options)
+
+
+##### Table Documentation
+
+[Table Documentation](https://docs.sqlalchemy.org/en/13/core/metadata.html#sqlalchemy.schema.Table()
+
+
+##### Building a Many to Many Relationship
+
+* [Basic Relationship Patterns](https://docs.sqlalchemy.org/en/13/orm/basic_relationships.html#relationship-patterns) goes into much more detail as to the different categories of relationships.
+
+First off, the association table seems to not be a class, but rather just a Table object.
+
+However [Building a Many to Many Relationship](https://docs.sqlalchemy.org/en/13/orm/tutorial.html#orm-tutorial-many-to-many) is a tutorial on just that topic.
+
+##### Self Referential Many to Many Relationship
+
+https://docs.sqlalchemy.org/en/13/orm/join_conditions.html#self-referential-many-to-many
+
+##### Configuring Many to Many Relationships
+
+https://docs.sqlalchemy.org/en/13/orm/extensions/declarative/relationships.html#declarative-many-to-many
+
+
+
+
+
+##### SQL Expression Language Tutorial
+
+[SQL Expression Language Tutorial](https://docs.sqlalchemy.org/en/13/core/tutorial.html)
+
+> presents a system of representing the primitive constructs of the relational database directly without opinion, the ORM presents a high level and abstracted pattern of usage, which itself is an example of applied usage of the Expression Language.
+
+
+
+
+
 
 
 ## Creating, Editing and Deleting Documents
