@@ -1886,7 +1886,144 @@ There seems to be more documentation about this specific, "query_property()" her
 
 We are likely using SQLAlchemy version 13.
 
+#### Reframing the Objective
 
+Basically, the objective at this point is being able to use SQL to connect to, and work with a database through our application.  Nothing seems to be working right now, because I don't fully understand the requirements for connecting to a database.
+
+So basically, our objective should be to just purely get SQLAlchemy working with Flask at this point.  Without this critical step, we can't really build the application.  We can read more about the documentation, setting up databases, watch tutorials on the topic, whatever works to get a fuller understanding and finally get things working.
+
+We are using, [Flask-SQLAlchemy==2.4.1](https://flask-sqlalchemy.palletsprojects.com/en/2.x/).  We can follow the following plan to understand more about SQLAlchemy:
+
+1. [Read the Flask SQLAlchemy Documentation](https://flask-sqlalchemy.palletsprojects.com/en/2.x/).  Really read through and try to understand it.
+2. [Read the SQL Alchemy Current Release Documentation](https://docs.sqlalchemy.org/en/13/).  We can assume we are on the current release until we know different.
+3. [ReRead the SQLAlchemy Tutorial from Hackers and Slackers](https://hackersandslackers.com/flask-sqlalchemy-database-models)
+4. [Use Flask and SQLalchemy, not Flask-SQLAlchemy!](https://towardsdatascience.com/use-flask-and-sqlalchemy-not-flask-sqlalchemy-5a64fafe22a4)
+5. [Flask SQL Alchemy Tutorial](https://www.youtube.com/watch?v=cYWiDiIUxQc)
+
+##### Initial Fix Attempts:
+
+Through the process of reading 1, SQLAlchemy Documentation:
+
+1. We see that our database setup, SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite://") should be:
+
+
+SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "postgresql://")
+
+2. in the SQLAlchemy Documentation, the following is mentioned:
+
+> For the common case of having one Flask application all you have to do is to create your Flask application, load the configuration of choice and then create the SQLAlchemy object by passing it the application.
+
+We appear to do this as follows within __init__.py:
+
+```
+# activate SQLAlchemy
+db = SQLAlchemy()
+
+app = Flask(__name__)
+
+db.init_app(app)
+```
+
+While the main SQAlchemy example shows feeding as follows:
+
+There is documentation for [init_app](https://flask-sqlalchemy.palletsprojects.com/en/2.x/api/?highlight=init_app#flask_sqlalchemy.SQLAlchemy.init_app) showing that we can use a callback to initialize the application.
+
+> Once created, that object then contains all the functions and helpers from both sqlalchemy and sqlalchemy.orm. Furthermore it provides a class called Model that is a declarative base which can be used to declare models:
+
+The documentation mentions:
+
+```
+class User(db.Model):
+```
+
+Which is different than what we had done most recently, which was to try to set up a declarative base Base.  Taking out "Base" from our model and replacing it back with db.Model clears the User.query error.
+
+The tutorial goes on to say we can create our database with:
+
+```
+db.create_all()
+
+```
+
+Which we do in manage.py.
+
+Once we have the database created we can query it with:
+
+```
+User.query.all()
+```
+
+The tutorial goes on to talk about accepting keyword arguments for all columns and relationships.
+
+> Note how we never defined a __init__ method on the User class? That’s because SQLAlchemy adds an implicit constructor to all model classes which accepts keyword arguments for all its columns and relationships. If you decide to override the constructor for any reason, make sure to keep accepting **kwargs and call the super constructor with those **kwargs to preserve this behavior:
+
+
+Once we updated our model, we get a new error:
+
+```
+sqlalchemy.exc.InvalidRequestError
+
+sqlalchemy.exc.InvalidRequestError: One or more mappers failed to initialize - can't proceed with initialization of other mappers. Triggering mapper: 'mapped class User->users'. Original exception was: When initializing mapper mapped class User->users, expression 'Document' failed to locate a name ('Document'). If this is a class name, consider adding this relationship() to the <class 'project.models.User'> class after both dependent classes have been defined.
+
+```
+
+Next in the tutorial, we see a section on relationships, including blog posts and categories.  This is what might be classified as a, "Simple Relationship" and might not cover many-to-many relationships, so we should keep reading.
+
+* [Contexts](https://flask-sqlalchemy.palletsprojects.com/en/2.x/contexts/) is used in the case that we need to use multiple applications, or create an application dynamically within a function, which we do.  Basically it talks about using db.init_app, and then in the case that we are working in a shell, or using a with statement to "set up" the context with session.
+
+```
+def my_function():
+    with app.app_context():
+        user = db.User(...)
+        db.session.add(user)
+        db.session.commit()
+```
+[app_context](https://flask.palletsprojects.com/en/1.1.x/api/#flask.Flask.app_context) is actually a flask function. This makes the current app point at this application.
+
+[Configuration](https://flask-sqlalchemy.palletsprojects.com/en/2.x/config/) is something we already have achieved within the config.py file.  Some possibly interesting notes include:
+
+* SQLALCHEMY_BINDS is for connecting to multiple databases.
+* SQLALCHEMY_ENGINE_OPTIONS has a dictionary of options and keyword args to send to create_engine()
+
+The tutorial goes into MetaData, which can be useful for migrations, and timeouts, which can be imposed by servers. 
+
+[Types of Relationship Models](https://flask-sqlalchemy.palletsprojects.com/en/2.x/models/) are covered in the "Declaring Models" part of the tutorial.  The following examples are given:
+
+* Simple Example
+* [One to Many](https://flask-sqlalchemy.palletsprojects.com/en/2.x/models/#one-to-many-relationships)
+* [Many to Many](https://flask-sqlalchemy.palletsprojects.com/en/2.x/models/#many-to-many-relationships) which also defines the helper table.
+
+From the tutorial:
+
+> What does db.relationship() do? That function returns a new property that can do multiple things. In this case we told it to point to the Address class and load multiple of those. How does it know that this will return more than one address? Because SQLAlchemy guesses a useful default from your declaration. If you would want to have a one-to-one relationship you can pass uselist=False to relationship().
+
+* backref is a simple awy to declare a new property on the, "other" Class being backreferenced to.  So if you have two classes, A and B, and want to have "widgets" as a property of A, you can add, "backref='widgets'" on B.
+* lazy defines when SQLAlchemy will load the data from the database. lazy="True" is the default, means that SQLAlchemy will load the data as necessary in one go.  There are different options for loading:
+
+* 'joined' / False
+* 'subquery'
+* 'dynamic'
+
+You can define lazy status for backrefs right in the backref()
+
+There is then an example given for many-to-many relationships.
+
+```
+tags = db.Table('tags',
+    db.Column('tag_id', db.Integer, db.ForeignKey('tag.id'), primary_key=True),
+    db.Column('page_id', db.Integer, db.ForeignKey('page.id'), primary_key=True)
+)
+
+class Page(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    tags = db.relationship('Tag', secondary=tags, lazy='subquery',
+        backref=db.backref('pages', lazy=True))
+
+class Tag(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+```
+
+Notably, this example above does not include a class for "tags" as a database, but it does include a class for, "Tag."
 
 
 ## Creating, Editing and Deleting Documents

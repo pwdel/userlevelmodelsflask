@@ -10,10 +10,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 
-Base = declarative_base()
-Base.query = Session.query_property()
-
-class User(Base):
+class User(db.Model):
     """User account model."""
 
     __tablename__ = 'users'
@@ -63,7 +60,7 @@ class User(Base):
     )
 
     """Backreference to Document class on retentions associate table."""
-    documents = relationship(
+    documents = db.relationship(
         'Document', 
         secondary='retentions', 
         back_populates='users'
@@ -124,7 +121,7 @@ class User(Base):
 
 
 
-class Documents(Base):
+class Documents(db.Model):
     """Document model."""
     """Describes table which includes documents."""
 
@@ -151,7 +148,7 @@ class Documents(Base):
     )
 
     """backreferences User class on retentions table"""
-    users = relationship(
+    users = db.relationship(
         'User', 
         secondary='retentions', 
         back_populates='documents'
@@ -159,7 +156,7 @@ class Documents(Base):
 
 
 
-class Retentions(Base):
+class Retentions(db.Model):
     """Model for who retains which document"""
     """Associate database."""
     __tablename__ = 'retentions'
@@ -198,12 +195,12 @@ class Retentions(Base):
     )
 
     """backreferences to user and document tables"""
-    user = relationship(
+    user = db.relationship(
         'User', 
         backref='retentions'
         )
 
-    document = relationship(
+    document = db.relationship(
         'Document', 
         backref='retentions'
         )

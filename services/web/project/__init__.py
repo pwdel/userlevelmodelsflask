@@ -13,7 +13,7 @@ port = int(os.environ.get("PORT", 5000))
 
 # activate SQLAlchemy
 db = SQLAlchemy()
-# set login manager name
+# set login manager name from flask_login
 login_manager = LoginManager()
 
 def create_app():
