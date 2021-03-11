@@ -2264,6 +2264,105 @@ First off, the association table seems to not be a class, but rather just a Tabl
 
 However [Building a Many to Many Relationship](https://docs.sqlalchemy.org/en/13/orm/tutorial.html#orm-tutorial-many-to-many) is a tutorial on just that topic.
 
+```
+association_table = Table('association', Base.metadata,
+    Column('left_id', Integer, ForeignKey('left.id')),
+    Column('right_id', Integer, ForeignKey('right.id'))
+)
+
+class Parent(Base):
+    __tablename__ = 'left'
+    id = Column(Integer, primary_key=True)
+    children = relationship("Child",
+                    secondary=association_table)
+
+class Child(Base):
+    __tablename__ = 'right'
+    id = Column(Integer, primary_key=True)
+```
+
+
+If you want to create a many to many relationship with a class, this is known as an Association Object:
+
+```
+class Association(Base):
+    __tablename__ = 'association'
+    left_id = Column(Integer, ForeignKey('left.id'), primary_key=True)
+    right_id = Column(Integer, ForeignKey('right.id'), primary_key=True)
+    extra_data = Column(String(50))
+    child = relationship("Child")
+
+class Parent(Base):
+    __tablename__ = 'left'
+    id = Column(Integer, primary_key=True)
+    children = relationship("Association")
+
+class Child(Base):
+    __tablename__ = 'right'
+    id = Column(Integer, primary_key=True)
+```
+> Working with the association pattern in its direct form requires that child objects are associated with an association instance before being appended to the parent; similarly, access from parent to child goes through the association object.
+
+What does this mean?  Basically all objects go through the association instance first.  So within the logical flow of the app code, first the Parent is associated with the association table, then the Child is associated with the association table, then they are linked together. [Association Proxy](https://docs.sqlalchemy.org/en/13/orm/extensions/associationproxy.html) exists to help with this logical flow.
+
+Also it is important to note (per a warning in the tutorial) that relationships don't change until Session.commit() has been completed.
+
+To make an attempt at fixing our database relationship, we can do the following:
+
+1. Add "primary_key = True" to our Retentions class for sponsor_id and document_id.
+
+```
+    sponsor_id = db.Column(
+        db.Integer, 
+        db.ForeignKey('users.id'),
+        primary_key=True,
+        unique=False,
+        nullable=False
+    )
+
+    document_id = db.Column(
+        db.Integer, 
+        db.ForeignKey('documents.id'),
+        primary_key=True,
+        unique=False,
+        nullable=False
+    )
+```
+
+2. Take out, "created_on" because it's not really needed and may require some special logic.
+3. Ensure the back_populates function points to user and document tables are included in the retentions table, as they do not appear to be needed, and appear to be needed in the User and Documents classes instead.
+
+Use singular, "user" and "document" in the Association (Retention) object to signify that columns are within this object. Use plural "users" and "documents" to specify the columns in the User and Document classes.
+
+```
+    """backreferences to user and document tables"""
+    user = db.relationship(
+        'User', 
+        back_populates='documents'
+        )
+
+    document = db.relationship(
+        'Document', 
+        back_populates='users'
+        )
+```
+4. Ensure that the relationship() on both User and Document objects points to the Retentions object, and back_populates to the correct column in that association (Retentions) table.
+
+As mentioned above, use singular, "user" and "document" in the Association (Retention) object to signify that columns are within this object. Use plural "users" and "documents" to specify the columns in the User and Document classes.
+
+```
+# for User class
+
+documents = relationship('Retentions',back_populates='user')
+
+# for Document class
+
+users = relationship('Retentions',back_populates='document')
+
+```
+Once this is properly built, we can try to re-launch to see what happens.
+
+
 ##### Self Referential Many to Many Relationship
 
 https://docs.sqlalchemy.org/en/13/orm/join_conditions.html#self-referential-many-to-many

@@ -10,6 +10,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 
+"""User Object"""
 class User(db.Model):
     """User account model."""
 
@@ -60,10 +61,10 @@ class User(db.Model):
     )
 
     """backreferences User class on retentions table"""    
-    retentions = db.relationship(
-
+    documents = relationship(
+        'Retentions',
+        back_populates='user'
         )
-
 
     def set_password(self, password):
         """Create hashed password."""
@@ -102,7 +103,7 @@ class User(db.Model):
         return '<User {}>'.format(self.username)
 
 
-
+"""Document Object"""
 class Document(db.Model):
     """Document model."""
     """Describes table which includes documents."""
@@ -129,30 +130,13 @@ class Document(db.Model):
         nullable=True
     )
     """backreferences User class on retentions table"""
-
-
-
-retention_table = Table(
-    'retention', 
-    db.Model.metadata,
-    Column('left_id', 
-        Integer, 
-        ForeignKey('left.id')
-        ),
-    Column('right_id', 
-        Integer, 
-        ForeignKey('right.id')
+    users = relationship(
+        'Retentions',
+        back_populates='document'
         )
-)
 
 
-
-
-
-
-
-
-
+"""Association Object - User Retentions of Documents"""
 class Retentions(db.Model):
     """Model for who retains which document"""
     """Associate database."""
@@ -166,38 +150,33 @@ class Retentions(db.Model):
     sponsor_id = db.Column(
         db.Integer, 
         db.ForeignKey('users.id'),
+        primary_key=True,
         unique=False,
         nullable=False
     )
 
-    editor_id = db.Column(
-        db.Integer, 
-        db.ForeignKey('users.id'),
-        unique=False,
-        nullable=True
-    )
+#    editor_id = db.Column(
+#        db.Integer, 
+#        db.ForeignKey('users.id'),
+#        unique=False,
+#        nullable=True
+#    )
 
     document_id = db.Column(
         db.Integer, 
         db.ForeignKey('documents.id'),
+        primary_key=True,
         unique=False,
         nullable=False
     )
 
-    created_on = db.Column(
-        db.DateTime,
-        index=False,
-        unique=False,
-        nullable=True
-    )
-
-    """backreferences to user and document tables"""
+        """backreferences to user and document tables"""
     user = db.relationship(
         'User', 
-        backref='retentions'
+        back_populates='documents'
         )
 
     document = db.relationship(
         'Document', 
-        backref='retentions'
+        back_populates='users'
         )
