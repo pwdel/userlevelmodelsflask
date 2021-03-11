@@ -1,6 +1,7 @@
 """Database models."""
 from . import db
-from flask_login import UserMixin
+from flask_login import UserMixin, _compat
+from flask_login._compat import text_type
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
@@ -66,6 +67,26 @@ class User(db.Model):
         back_populates='user'
         )
 
+    """UserMixin requirements from flask-login"""
+    @property
+    def is_active(self):
+        return True
+
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    def get_id(self):
+        try:
+            return text_type(self.id)
+        except AttributeError:
+            raise NotImplementedError('No `id` attribute - override `get_id`')
+
+    """Password Check Functions"""
     def set_password(self, password):
         """Create hashed password."""
         self.password = generate_password_hash(
@@ -77,6 +98,7 @@ class User(db.Model):
         """Check hashed password."""
         return check_password_hash(self.password, password)
 
+    """Sponsor vs. Editor Role Functions"""
     def sponsor_required(f):
         @wraps(f)
         def wrap(*args, **kwargs):
@@ -170,7 +192,7 @@ class Retentions(db.Model):
         nullable=False
     )
 
-        """backreferences to user and document tables"""
+    """backreferences to user and document tables"""
     user = db.relationship(
         'User', 
         back_populates='documents'

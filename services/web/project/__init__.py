@@ -22,6 +22,8 @@ def create_app():
     # pull the config file, per flask documentation
     # Application configuration
     app.config.from_object("project.config.Config")
+    # auto reload templates
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
 
     # Set environment for assets
     assets = Environment()

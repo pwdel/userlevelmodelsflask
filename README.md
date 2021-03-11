@@ -2362,55 +2362,148 @@ users = relationship('Retentions',back_populates='document')
 ```
 Once this is properly built, we can try to re-launch to see what happens.
 
+##### Running with Clean Relationship Setup
 
-##### Self Referential Many to Many Relationship
+When we run this, we get the error:
 
-https://docs.sqlalchemy.org/en/13/orm/join_conditions.html#self-referential-many-to-many
+```
+on line76 of auth.py
 
-##### Configuring Many to Many Relationships
+from login_user(user)
 
-https://docs.sqlalchemy.org/en/13/orm/extensions/declarative/relationships.html#declarative-many-to-many
+AttributeError: 'User' object has no attribute 'is_active'
+```
 
+This is in part because we had deleted the extra attributes for user after eliminating the UserMixin model. This has to do with flask_login. We can add the required attributes once again.
 
+To be cleaner about this, [we can look right at the codebase on Github](https://github.com/maxcountryman/flask-login/blob/fd7984cd645c1e7c34c6af53b0571f7380b17cc3/flask_login/utils.py#L145). 
 
+On auth.py we can change the relevant section to be explicit in our options:
 
+```
+            db.session.add(user)
+            db.session.commit()  # Create new user
+            # log in as newly created user from flask_login
+            login_user(user, remember=False, duration=None, force=True, fresh=True)
+            # if everything goes well, they will be redirected to the main application
 
-##### SQL Expression Language Tutorial
+```
+* remember - we don't want to remember the user after their session expires.
+* duration - cookie never expires
+* force - if this is set to true, it will log them in regardless of is_active. This we need to set to True
+* fresh - per the [flask_login](https://flask-login.readthedocs.io/en/latest/#fresh-logins) documentation, basically high security activities require a fresh login.
 
-[SQL Expression Language Tutorial](https://docs.sqlalchemy.org/en/13/core/tutorial.html)
+After this error was cleared, we see another flask_login error, which is that:
 
-> presents a system of representing the primitive constructs of the relational database directly without opinion, the ORM presents a high level and abstracted pattern of usage, which itself is an example of applied usage of the Expression Language.
+```
+AttributeError: 'User' object has no attribute 'get_id'
+```
+Basically, there are four main methods which flask_login requires:
 
+* is_authenticated()
+* is_active()
+* is_anonymous() 
+* get_id()
 
+UserMixin provides the default implementations.  We can copy from UserMixin, it is not required to inheret from [UserMixin](https://flask-login.readthedocs.io/en/latest/_modules/flask_login/mixins.html#UserMixin).
 
+We should be able to copy and paste the following from UserMixin into our User class.
 
+```
+    @property
+    def is_active(self):
+        return True
 
+    @property
+    def is_authenticated(self):
+        return True
 
+    @property
+    def is_anonymous(self):
+        return False
 
-## Creating, Editing and Deleting Documents
+    def get_id(self):
+        try:
+            return text_type(self.id)
+        except AttributeError:
+            raise NotImplementedError('No `id` attribute - override `get_id`')
 
-Creating documents appears to call for a completely new set of logic.
+```
+Why do we use @property?  Basically this is a shortcut for a property() function which allows attributes or instances from classes to be able to be get, set or deleted (read, write, delete).  It basically makes the instances manipulatable. For users, we need to be able to manipulate the instances of users in terms of whether they are active (yes/no), authenticated (yes/no), or annonymous (yes/no). The user_id is of course static.
 
-If we look at this [Flask Blog Example Github Source Code](https://github.com/gouthambs/Flask-Blogging), we see that they have things architected as follows:
+This [StackOverflow](https://stackoverflow.com/questions/17330160/how-does-the-property-decorator-work-in-python) discussion covers it well, as well as the [Python Documentation](https://docs.python.org/3/reference/datamodel.html#object.__get__).
 
-#### Flask-Blogging Rough Outline
+After implementing the above, next, we get an error that: text_type is not defined.  Where does text_type come from?  Looking in the [flask_login Github for compat.py](https://github.com/maxcountryman/flask-login/blob/main/flask_login/_compat.py) we see that there is a module for flask_login.-compat (replace - with underscore). So we simply add to auth.py:
 
-* Blogging Engine Module (handles the blog storage, configuration, permissions, extension, configuration, user loaders, and calls other functions.)
-* Has a Post Processor (handles markdown extensions)
-* Uses SQLAStorage
-* Stores data in Google Cloud
+```
+from flask_login.-compat import text_type
+```
+After this was correctly implemented, we see a werkzeug.routing.BuildError, which means we are now at the blueprint layer.  The error is fairly self-explanitory, we just seemed to have the wrong blueprint name.
 
-Basically, it isn't well-organized and there is not a lot of documentation regarding how it should be organized.
+After working around with Blueprints and templates, I was able to easily modify the code and update things on the fly since the application is on a Docker container.
 
-However, the convention they seem to use is put a lot of processes into, "Blogging Engine."  We could likewise, create an, "Engine" however we might just call it a, "DocumentEngine," within engine.py.
+### Double Checking Database
 
-## Logical Flows
+First we completely rebuild the image as a detached, static image with:
 
-To create the logic behind what user can see which dashboard, I used [Lucid online flowcharts](https://lucid.app/documents#/dashboard).
+```
+sudo docker-compose up -d --build
+```
+Then we connect directly to the database with:
 
-![](/readme_img/logical.png)
+```
+sudo docker-compose exec db psql --username=userlevels_flask --dbname=userlevels_flask_dev
+```
+
+We can list our relations and view them with:
+
+```
+userlevels_flask_dev=# \dt                                                                 
+                  List of relations                                                        
+ Schema |       Name       | Type  |      Owner                                            
+--------+------------------+-------+------------------                                     
+ public | documents        | table | userlevels_flask                                      
+ public | flasklogin-users | table | userlevels_flask                                      
+ public | retentions       | table | userlevels_flask                                      
+ public | users            | table | userlevels_flask                                      
+```
+
+We inspect each relation table with the following commands:
+
+```
+ \d documents
+ \d users
+ \d retentions
+```
+Upon inspection, we see that a relation setup is now properly listed for each table, with an example shown below:
+
+```
+userlevels_flask_dev-# \d retentions                                                       
+               Table "public.retentions"                                                   
+   Column    |  Type   | Collation | Nullable | Default                                    
+-------------+---------+-----------+----------+---------                                   
+ id          | integer |           | not null |                                            
+ sponsor_id  | integer |           | not null |                                            
+ document_id | integer |           | not null |                                            
+Indexes:                                                                                   
+    "retentions_pkey" PRIMARY KEY, btree (id, sponsor_id, document_id)                     
+Foreign-key constraints:                                                                   
+    "retentions_document_id_fkey" FOREIGN KEY (document_id) REFERENCES documents(id)       
+    "retentions_sponsor_id_fkey" FOREIGN KEY (sponsor_id) REFERENCES users(id)             
+```
+
+Double checking that a user type, "sponsor" was created within the database when we log in as a sponsor:
+
+```
+ id | name | user_type |     email     |  password      | organization | created_on | last_login              
+----+------+-----------+---------------+----------------+--------------+------------+------------             
+  1 | 11   | sponsor   | test@test.com | sha256$6ieI9WHh | a            |            |                         
+```
+So basically the sponsor login is working.
 
 ## Pages and Blueprints for Different User Types
+
+Now that we have a login working with a properly working relational database, we can create different user types and different login pages for the user types.  We should in theory be able to duplicate the sponsor login page with an editor blueprint.
 
 Above, we created a layout which helps us understand what kinds of users have what kinds of dashboards. We can start out with the, "Signup" functionality which now has one type of user, and create a setup which will allow links to two different types of users.
 
@@ -2482,6 +2575,31 @@ What we have to do:
 
 
 
+## Creating, Editing and Deleting Documents
+
+Creating documents appears to call for a completely new set of logic.
+
+If we look at this [Flask Blog Example Github Source Code](https://github.com/gouthambs/Flask-Blogging), we see that they have things architected as follows:
+
+#### Flask-Blogging Rough Outline
+
+* Blogging Engine Module (handles the blog storage, configuration, permissions, extension, configuration, user loaders, and calls other functions.)
+* Has a Post Processor (handles markdown extensions)
+* Uses SQLAStorage
+* Stores data in Google Cloud
+
+Basically, it isn't well-organized and there is not a lot of documentation regarding how it should be organized.
+
+However, the convention they seem to use is put a lot of processes into, "Blogging Engine."  We could likewise, create an, "Engine" however we might just call it a, "DocumentEngine," within engine.py.
+
+## Logical Flows
+
+To create the logic behind what user can see which dashboard, I used [Lucid online flowcharts](https://lucid.app/documents#/dashboard).
+
+![](/readme_img/logical.png)
+
+
+
 ## Future Work
 
 * We may want to create different tables for different types of users rather than keep the users all in the same table. This is a philosophical design problem. Basically this design problem is based upon whether sponsors and editors may ever change their type, e.g. whether editors may ever be promoted to sponsors. If this is a customer/vendor relationship, then there may never or very infrequently a need to switch user type back and fourth. However if this is a blog writing application, with a group or team of relatively equal types of people who can perform different roles over time, it may be better to keep them in the same table.
@@ -2490,6 +2608,15 @@ What we have to do:
 * Resources may also be an important thing to create - basically giving a sponsor or privleged account access to a resource, which might be a part of a microservice, even possibly in a different container, may become important in the future.
 * Error prevention and UX considerations are extremely minimal in this application. There are lots of easy to fix, low hanging fruit here.
 * Dedicated role table - rather than having hard-coded roles, just improve the database to have a table including roles, so that we can write one function which dynamically checks for roles rather than have to continously write different functons for different roles - that's if we anticipate many different roles coming into play in the future.
+* [Self Referential Many to Many Relationship](https://docs.sqlalchemy.org/en/13/orm/join_conditions.html#self-referential-many-to-many)
+* [Configuring Many to Many Relationships](https://docs.sqlalchemy.org/en/13/orm/extensions/declarative/relationships.html#declarative-many-to-many
+)
+* [SQL Expression Language Tutorial](https://docs.sqlalchemy.org/en/13/core/tutorial.html)
+
+> presents a system of representing the primitive constructs of the relational database directly without opinion, the ORM presents a high level and abstracted pattern of usage, which itself is an example of applied usage of the Expression Language.
+
+
+
 
 ## References
 
