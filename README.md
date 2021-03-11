@@ -2566,9 +2566,180 @@ Once we have that, we will change the above code to:
 
 ### Changing the auth_bp.signup to sponsorauth.bp.signup and editorauth_bp.signup under auth.py
 
-What we have to do:
+#### auth_bp for usertype sponsor
 
-* Set the usertype as sponsor or editor
+Initially, we only can create one user type, sponsor.  We need to re-write our authentication function to route users over to redirect the sponsor user type over to "sponsor_bp.dashboard_sponsor".
+
+According to the flask-login documentation, [current_user](https://flask-login.readthedocs.io/en/latest/#flask_login.current_user) is a proxy for the user, so in theory we should be able to just query from the user class.
+
+```
+    # Bypass if user is logged in
+    if current_user.is_authenticated:
+        # get user type
+        usertype_check = User.query.get('user_type')
+        if user.user_type=='sponsor':
+            return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+        elif user.user_type=='editor':
+            return redirect(url_for('editor_bp.dashboard_editor'))
+```
+Of course, once we do this, we have a routing problem, we had previously been routing through to main_bp, via this dashboard, but we no longer have a, "main" dashboard.
+
+```
+@main_bp.route('/', methods=['GET'])
+@login_required
+def dashboard():
+    """Logged-in User Dashboard."""
+    return render_template(
+        'dashboard.jinja2',
+        title='User Dashboard.',
+        template='dashboard-template',
+        current_user=current_user,
+        body="You are now logged in!"
+    )
+```
+We should be able to delete the above, however what's more important is to understand what's sending us here. For that we look further into the auth.py file, after the "# Bypass if user is logged in."
+
+```
+    # Validate login attempt
+    form = LoginForm()
+    # Validate login attempt
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user and user.check_password(password=form.password.data):
+            login_user(user)
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('main_bp.dashboard'))
+```
+
+Basically the point at which we validate the login is the next section of auth.py after checking whether a user can Bypass the login process.
+
+The user is being redirected to the main_bp.dashboard. Instead we need to check user type and redirect them to the appropriate dashboard as follows:
+
+```
+   form = LoginForm()
+    # Validate login attempt
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user and user.check_password(password=form.password.data):
+            login_user(user)
+            next_page = request.args.get('next')
+            if user.user_type=='sponsor':
+                return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+            elif user.user_type=='editor':
+                return redirect(url_for('editor_bp.dashboard_editor'))
+```
+The next_page argument may not even matter, because we are not redirecting to a "next_page or..."
+
+Note - there are some specifics in how SQLAlchemy is able to query columns in the database.
+
+```
+user.user_type=='sponsor':
+```
+...works because we are querying, in a pythonic way, one specific instance of user which was queried above with User.query.filter_by(email).first...(rough outline)  - which shows that we pulled the User class instance out into user, and then were able to index that instance with user.usertype.
+
+* [Query Documentation](https://docs.sqlalchemy.org/en/13/orm/query.html)
+* [User.query.get](https://docs.sqlalchemy.org/en/13/orm/query.html#sqlalchemy.orm.query.Query.get) is evidently there to return an instance based upon the primary key identifier.
+
+##### Main Route "/" Change to Sponsor
+
+Previously we had:
+
+```
+@main_bp.route('/', methods=['GET'])
+@login_required
+def dashboard():
+    """Logged-in User Dashboard."""
+    return render_template(
+        'dashboard.jinja2',
+        title='User Dashboard.',
+        template='dashboard-template',
+        current_user=current_user,
+        body="You are now logged in!"
+    )
+```
+When we remove this, we get:
+
+```
+flask  | AssertionError: View function mapping is overwriting an existing endpoint function: main_bp.logout
+
+```
+
+We seem to have multiple methods using the same name.
+
+If we remove:
+
+```
+@main_bp.route("/logout")
+@login_required
+def logout():
+    """User log-out logic."""
+    logout_user()
+    return redirect(url_for('auth_bp.login'))
+```
+
+The error clears. However what happens when we try to log out?  We have to log in to be able to see.
+
+
+We also had been getting a dashboard error.  
+
+```
+werkzeug.routing.BuildError: Could not build url for endpoint 'sponsor_bp.dashboard_sponsor'. Did you mean 'sponsor_bp.dashboard' instead?
+```
+
+Whereas previously we had the following definition for the dashboard route:
+
+```
+@sponsor_bp.route('/', methods=['GET'])
+@login_required
+def dashboard():
+    return render_template(
+        'dashboard_sponsor.jinja2',
+        title='Sponsor Dashboard.',
+        template='dashboard-template',
+        current_user=current_user,
+        body="You are now logged in!"
+    )
+```
+We change this to:
+
+```
+@sponsor_bp.route('/', methods=['GET'])
+@login_required
+def dashboard():
+    """Logged-in User Dashboard."""
+    return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+
+```
+Which still created an error.
+
+What was really happening was that both the function and the template had to be renamed, and share the same name. Therefore on routes.py we had to change our @sponsor.bp route for "/" to:
+
+```
+@sponsor_bp.route('/', methods=['GET'])
+@login_required
+def dashboard_sponsor():
+    """Logged-in User Dashboard."""
+    return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+
+```
+
+Basically it seems
+
+##### Main Route /login
+
+```
+    # Bypass if user is logged in
+    if current_user.is_authenticated:
+        # Check if user is sponsor
+        if current_user.
+        return redirect(url_for('main_bp.dashboard'))
+```
+So where is current_user coming from?
+
+
+
+
+##### LoginForm()
 
 
 ### Changing routes.py

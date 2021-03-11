@@ -26,7 +26,12 @@ def login():
     """
     # Bypass if user is logged in
     if current_user.is_authenticated:
-        return redirect(url_for('main_bp.dashboard'))
+        # get user type
+        usertype_check = User.query.get('user_type')
+        if user.user_type=='sponsor':
+            return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+        elif user.user_type=='editor':
+            return redirect(url_for('editor_bp.dashboard_editor'))
 
     form = LoginForm()
     # Validate login attempt
@@ -35,7 +40,10 @@ def login():
         if user and user.check_password(password=form.password.data):
             login_user(user)
             next_page = request.args.get('next')
-            return redirect(next_page or url_for('main_bp.dashboard'))
+            if user.user_type=='sponsor':
+                return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+            elif user.user_type=='editor':
+                return redirect(url_for('editor_bp.dashboard_editor'))
         flash('Invalid username/password combination')
         return redirect(url_for('auth_bp.login'))
     return render_template(
@@ -75,7 +83,7 @@ def signupsponsor():
             db.session.commit()  # Create new user
             login_user(user, remember=False, duration=None, force=False, fresh=True)
             # if everything goes well, they will be redirected to the main application
-            return redirect(url_for('sponsor_bp.dashboard'))
+            return redirect(url_for('sponsor_bp.dashboard_sponsor'))
         flash('A user already exists with that email address.')
     return render_template(
         'signup_sponsor.jinja2',

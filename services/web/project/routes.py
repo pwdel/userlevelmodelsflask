@@ -11,27 +11,6 @@ main_bp = Blueprint(
     static_folder='static'
 )
 
-@main_bp.route('/', methods=['GET'])
-@login_required
-def dashboard():
-    """Logged-in User Dashboard."""
-    return render_template(
-        'dashboard.jinja2',
-        title='User Dashboard.',
-        template='dashboard-template',
-        current_user=current_user,
-        body="You are now logged in!"
-    )
-
-
-@main_bp.route("/logout")
-@login_required
-def logout():
-    """User log-out logic."""
-    logout_user()
-    return redirect(url_for('auth_bp.login'))
-
-
 # Sponsor Blueprint
 sponsor_bp = Blueprint(
     'sponsor_bp', __name__,
@@ -39,22 +18,20 @@ sponsor_bp = Blueprint(
     static_folder='static'
 )
 
-@sponsor_bp.route('/', methods=['GET'])
-@login_required
-def dashboard():
-    """Logged-in User Dashboard."""
-    return render_template(
-        'dashboard.jinja2',
-        title='User Dashboard.',
-        template='dashboard-template',
-        current_user=current_user,
-        body="You are now logged in!"
-    )
-
-
 # Editor Blueprint
 editor_bp = Blueprint(
     'editor_bp', __name__,
     template_folder='templates_editors',
     static_folder='static'
 )
+
+@main_bp.route('/', methods=['GET'])
+@login_required
+
+
+@sponsor_bp.route('/', methods=['GET'])
+@login_required
+def dashboard_sponsor():
+    """Logged-in User Dashboard."""
+    return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+
