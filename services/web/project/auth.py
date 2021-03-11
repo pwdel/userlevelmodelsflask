@@ -73,9 +73,9 @@ def signupsponsor():
             # commit our new user record and log the user in
             db.session.add(user)
             db.session.commit()  # Create new user
-            login_user(user)  # Log in as newly created user - from flask_login
+            login_user(user, remember=False, duration=None, force=False, fresh=True)
             # if everything goes well, they will be redirected to the main application
-            return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+            return redirect(url_for('sponsor_bp.dashboard'))
         flash('A user already exists with that email address.')
     return render_template(
         'signup_sponsor.jinja2',

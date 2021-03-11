@@ -13,7 +13,7 @@ port = int(os.environ.get("PORT", 5000))
 
 # activate SQLAlchemy
 db = SQLAlchemy()
-# set login manager name
+# set login manager name from flask_login
 login_manager = LoginManager()
 
 def create_app():
@@ -22,6 +22,8 @@ def create_app():
     # pull the config file, per flask documentation
     # Application configuration
     app.config.from_object("project.config.Config")
+    # auto reload templates
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
 
     # Set environment for assets
     assets = Environment()

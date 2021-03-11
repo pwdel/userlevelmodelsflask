@@ -1,6 +1,7 @@
 """Database models."""
 from . import db
-from flask_login import UserMixin
+from flask_login import UserMixin, _compat
+from flask_login._compat import text_type
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
@@ -10,10 +11,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 
-Base = declarative_base()
-Base.query = Session.query_property()
-
-class User(Base):
+"""User Object"""
+class User(db.Model):
     """User account model."""
 
     __tablename__ = 'users'
@@ -62,13 +61,32 @@ class User(Base):
         nullable=True
     )
 
-    """Backreference to Document class on retentions associate table."""
+    """backreferences User class on retentions table"""    
     documents = relationship(
-        'Document', 
-        secondary='retentions', 
-        back_populates='users'
+        'Retentions',
+        back_populates='user'
         )
 
+    """UserMixin requirements from flask-login"""
+    @property
+    def is_active(self):
+        return True
+
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    def get_id(self):
+        try:
+            return text_type(self.id)
+        except AttributeError:
+            raise NotImplementedError('No `id` attribute - override `get_id`')
+
+    """Password Check Functions"""
     def set_password(self, password):
         """Create hashed password."""
         self.password = generate_password_hash(
@@ -80,6 +98,7 @@ class User(Base):
         """Check hashed password."""
         return check_password_hash(self.password, password)
 
+    """Sponsor vs. Editor Role Functions"""
     def sponsor_required(f):
         @wraps(f)
         def wrap(*args, **kwargs):
@@ -102,29 +121,12 @@ class User(Base):
 
         return wrap
 
-    #-----login requirements-----
-    def is_active(self):
-    #all users are active
-        return True 
-
-    def get_id(self):
-        # returns the user e-mail. not sure who calls this
-        return self.email
-
-    def is_authenticated(self):
-        return self.authenticated
-
-    def is_anonymous(self):
-        # False as we do not support annonymity
-        return False
-
-
     def __repr__(self):
         return '<User {}>'.format(self.username)
 
 
-
-class Documents(Base):
+"""Document Object"""
+class Document(db.Model):
     """Document model."""
     """Describes table which includes documents."""
 
@@ -149,17 +151,15 @@ class Documents(Base):
         unique=False,
         nullable=True
     )
-
     """backreferences User class on retentions table"""
     users = relationship(
-        'User', 
-        secondary='retentions', 
-        back_populates='documents'
+        'Retentions',
+        back_populates='document'
         )
 
 
-
-class Retentions(Base):
+"""Association Object - User Retentions of Documents"""
+class Retentions(db.Model):
     """Model for who retains which document"""
     """Associate database."""
     __tablename__ = 'retentions'
@@ -172,38 +172,33 @@ class Retentions(Base):
     sponsor_id = db.Column(
         db.Integer, 
         db.ForeignKey('users.id'),
+        primary_key=True,
         unique=False,
         nullable=False
     )
 
-    editor_id = db.Column(
-        db.Integer, 
-        db.ForeignKey('users.id'),
-        unique=False,
-        nullable=True
-    )
+#    editor_id = db.Column(
+#        db.Integer, 
+#        db.ForeignKey('users.id'),
+#        unique=False,
+#        nullable=True
+#    )
 
     document_id = db.Column(
         db.Integer, 
         db.ForeignKey('documents.id'),
+        primary_key=True,
         unique=False,
         nullable=False
     )
 
-    created_on = db.Column(
-        db.DateTime,
-        index=False,
-        unique=False,
-        nullable=True
-    )
-
     """backreferences to user and document tables"""
-    user = relationship(
+    user = db.relationship(
         'User', 
-        backref='retentions'
+        back_populates='documents'
         )
 
-    document = relationship(
+    document = db.relationship(
         'Document', 
-        backref='retentions'
+        back_populates='users'
         )
