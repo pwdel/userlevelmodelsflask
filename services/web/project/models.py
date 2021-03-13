@@ -137,13 +137,13 @@ class Document(db.Model):
     )
     document_name = db.Column(
         db.String(100),
-        unique=True,
-        nullable=False
+        unique=False,
+        nullable=True
     )
-    body = db.Column(
+    document_body = db.Column(
         db.String(1000),
         unique=False,
-        nullable=False
+        nullable=True
     )
     created_on = db.Column(
         db.DateTime,

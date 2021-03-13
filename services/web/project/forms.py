@@ -59,3 +59,15 @@ class LoginForm(FlaskForm):
     submit = SubmitField('Log In')
 
 
+
+class NewDocumentForm(FlaskForm):
+    """Create New Document Form."""
+    document_name = StringField(
+        'Document Name',
+        validators=[Optional()]
+    )
+    document_body = StringField(
+        'Document Body',
+        validators=[Optional()]
+    )
+    save = SubmitField('Save')
