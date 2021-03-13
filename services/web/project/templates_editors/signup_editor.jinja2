@@ -23,9 +23,9 @@
       </div>
     {% endfor %}
 
-    <h1>Sponsor Sign Up</h1>
+    <h1>Editor Sign Up</h1>
 
-    <form method="POST" action="/signupsponsor">
+    <form method="POST" action="/signupeditor">
       {{ form.csrf_token }}
 
       <fieldset class="name">
@@ -91,8 +91,8 @@
     </div>
     <div class="login-signup">
       <div>
-        <span>Need to Register as an Editor?</span>
-        <a href="{{ url_for('editor_bp.signupeditor') }}">Sign Up.</a>
+        <span>Need to Register as a Sponsor?</span>
+        <a href="{{ url_for('sponsor_bp.signupsponsor') }}">Sign Up.</a>
       </div>
     </div>    
   </div>
