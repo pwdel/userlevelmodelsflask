@@ -25,13 +25,47 @@ editor_bp = Blueprint(
     static_folder='static'
 )
 
+# when any user goes to /, they get redirected to /login
 @main_bp.route('/', methods=['GET'])
 @login_required
 
 
-@sponsor_bp.route('/', methods=['GET'])
+# ---------- sponsor user routes ----------
+
+@sponsor_bp.route("/logoutsponsor")
+@login_required
+def logoutsponsor():
+    """User log-out logic."""
+    logout_user()
+    return redirect(url_for('auth_bp.login'))
+
+@sponsor_bp.route('/sponsordashboard', methods=['GET'])
 @login_required
 def dashboard_sponsor():
     """Logged-in User Dashboard."""
-    return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+    return render_template(
+        'dashboard_sponsor.jinja2',
+        title='Sponsor Dashboard',
+        template='layout',
+        body="Welcome to the Sponsor Dashboard."
+    )
 
+# ---------- editor user routes ----------
+
+@editor_bp.route("/logouteditor")
+@login_required
+def logouteditor():
+    """User log-out logic."""
+    logout_user()
+    return redirect(url_for('auth_bp.login'))
+
+@sponsor_bp.route('/editordashboard', methods=['GET'])
+@login_required
+def dashboard_editor():
+    """Logged-in User Dashboard."""
+    return render_template(
+        'dashboard_editor.jinja2',
+        title='Editor Dashboard',
+        template='layout',
+        body="Welcome to the Editor Dashboard."
+    )

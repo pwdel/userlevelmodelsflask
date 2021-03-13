@@ -2576,12 +2576,259 @@ According to the flask-login documentation, [current_user](https://flask-login.r
     # Bypass if user is logged in
     if current_user.is_authenticated:
         # get user type
-        usertype_check = User.query.get('user_type')
-        if user.user_type=='sponsor':
+        if current_user.user_type=='sponsor':
             return redirect(url_for('sponsor_bp.dashboard_sponsor'))
-        elif user.user_type=='editor':
+        elif current_user.user_type=='editor':
+            return redirect(url_for('editor_bp.dashboard_editor'))
+
+```
+
+current_user 
+
+```
+ERROR:  invalid input syntax for type integer: "user_type" at character 301
+
+STATEMENT:  SELECT users.id AS users_id, users.name AS users_name, users.user_type AS users_user_type, users.email AS users_email, users.password AS users_password, users.organization AS users_organization, users.created_on AS users_created_on, users.last_login AS users_last_login
+
+
+db     |        FROM users 
+db     |        WHERE users.id = 'user_type'
+```
+
+So evidently the statement current_user.user_type sees current_user as being equivalent to user.user.id or rather, [the current_user is only calling the id, per this StackOverflow post](https://stackoverflow.com/questions/30778221/flask-login-current-user-returns-only-id).
+
+We have a function called, "login_manager.user_loader":
+
+```
+@login_manager.user_loader
+def load_user(user_id):
+    """Check if user is logged-in on every page load."""
+    if user_id is not None:
+        return User.query.get(user_id)
+    return None
+```
+So this returns the user_id. We could try to query based upon the user_id.
+
+To build an appropriate SQL function, we could try it out by logging into our database and playing around with the user table.
+
+To gain a better understanding of how to query a user_type given a user.id, we can check out the [SQLAlchemy Core Tutorial](https://docs.sqlalchemy.org/en/13/core/tutorial.html).  
+
+```
+    if current_user.is_authenticated:
+        # get user type
+        if current_user.user_type=='sponsor':
+            return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+        elif current_user.user_type=='editor':
             return redirect(url_for('editor_bp.dashboard_editor'))
 ```
+
+To re-write the above, we're trying to figure out how we can get access to the SQALchemy API, and then performcommands on the Flask application. Within the app itself, and according to the [SQLAlchemy API documentation](https://flask-sqlalchemy.palletsprojects.com/en/2.x/api/?highlight=get), we are already connected to the database through what we had set under __init__.py
+
+```
+db = SQLAlchemy()
+```
+On the other hand, we can also use flask-login to do different kinds of queries. "current_user" is from flask-login.
+
+We can define a function within the class that queries for the actual user type, and call that. However, if we are only going to use this once, why would we want to create a function for it?  Well, we might not just do this once - we might repeat it.
+
+Let's just make sure we can create a successful function in this instance first, on the fly, and then we can go back and add it as a function within the User class.
+
+To help build this, we can enter into the python bash within our Docker container:
+
+```
+sudo docker run --rm -it userlevels_flask bash
+
+root@60b795f0f834:/usr/src/app# python
+
+```
+
+Do we need a session?  Yes, we need a session. [Per the SQLAlchemy documentation](https://docs.sqlalchemy.org/en/13/orm/session_basics.html), The session establishes conversations and represents a, "holding zone" for objects which we have loaded.  We can use:
+
+```
+db.session.query()
+```
+
+Because at the top of auth.py we import, "from .models import db, User"
+
+* [This stackoverflow discussion about flask-login with multiple roles](https://stackoverflow.com/questions/15871391/implementing-flask-login-with-multiple-user-classes) has the author writing a decorator to check user role type.
+* [This function on github](https://github.com/schwartz721/role_required) creates a decorator that can be customized to restrict access to flask views to users who have been given a specific role.
+
+There seem to be a lot of articles on how to solve the general problem of multiple user roles, from different perspectives - however rather than guessing and checking, I should probably focus on what my core issue is, which is - understanding how to use the database, SQLAlchemy, and knowing how to communicate back and fourth with SQL commands or SQLAlchemy commands to read, write, add and delete data from the database in general.
+
+## Reviewing SQLAlchemy ORM and SQLAlchemy Core
+
+### SQLAlchemy Working with Related Objects
+
+[SQLAlchemy Working with Related Objects](https://docs.sqlalchemy.org/en/13/orm/tutorial.html#working-with-related-objects)
+
+#### Adding Data via ORM
+
+For a one to many relationship, to add a piece of data, for example a user, we would do that as follows:
+
+```
+jack = User(name='jack', fullname='Jack Bean', nickname='gjffdd')
+```
+The tutorial itself uses the python command line as a way to demonstrate how to add data and run SQLAlchemy commands. It would be nice if we could log in to the Flask Python command line.  We do have a CLI called, ["Click" which is a part of Flask](https://flask.palletsprojects.com/en/1.1.x/cli/).
+
+What is an SQL Join query?  Basically it's a query that combines two tables, such as a, "User" and a "Document."  This would be the type of query we need when we want to list certain documents attached to certain users, for example.  However right now, we just need a simple query, that lists one type of user.
+
+[W3Schools has an SQL Syntax Tutorial](https://www.w3schools.com/sql/sql_syntax.asp) that we could go through to better understand what we are really trying to do.
+
+##### SQL Statements Tutorial
+
+I went through this tutorial and [put it under a different Github repo here](https://github.com/pwdel/sqltutorial).
+
+##### Back to SQLAlchemy
+
+So in psuedocode, we want an SQLAlchemy command which effectively does:
+
+```
+SELECT * FROM users WHERE user_id = current_user;
+```
+We could pull out the user_type with something along the lines of:
+
+```
+SELECT DISTINCT user_type FROM users
+WHERE user_id=current_user;
+```
+Which should display the user_type for the current user.  From this point, we should be able to route the current user to the proper location.
+
+How do we do this in SQLAlchemy and our current code?
+
+Basically, it seems that it needs to be a Query.  Per the documentation [here on Query](https://docs.sqlalchemy.org/en/13/orm/query.html#sqlalchemy.orm.query.Query) and the [tutorial on Querying](https://docs.sqlalchemy.org/en/13/orm/tutorial.html#working-with-related-objects):
+
+1. Query can do iterative listing of a set of objects.
+
+```
+for instance in session.query(User).order_by(User.id):
+     print(instance.name, instance.fullname)
+```
+
+2. Query accepts ORM-instrumented descriptors as arguments.
+
+```
+for name, fullname in session.query(User.name, User.fullname):
+...     print(name, fullname)
+```
+
+3. Query can pull out entire rows as tuples with .all() appended to the end.
+
+```
+>> for row in session.query(User, User.name).all():
+...    print(row.User, row.name)
+```
+
+So for what we are trying to achieve above, we likely would use something like:
+
+```
+session.query(User.id)
+```
+However since we had already set up a session, and imported via: "from .models import db, User" we could likely set up and find the user number by a Query, as shown in the [Query API](https://docs.sqlalchemy.org/en/13/orm/query.html).  Query is the source of all SELECT statements generated by the ORM.  :
+
+```
+Roughly...
+
+SELECT DISTINCT user_type FROM users
+WHERE user_id=current_user;
+
+translates to
+
+user_type = User.query(User.user_type)
+
+or possibly
+
+user_type = User.query(User.user_type).distinct()
+
+
+```
+
+Overall, our "Bypass if user is logged in" section of auth.py ends up looking like:
+
+```
+    # Bypass if user is logged in
+    if current_user.is_authenticated:
+        # get user number
+        user_type = User.query(User.user_type)
+        print(user_type)
+
+        # based upon user type, route to location
+        if user_type=='sponsor':
+            return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+        elif user_type=='editor':
+            return redirect(url_for('editor_bp.dashboard_editor'))
+
+```
+If we take this out, we get a 302 redirect error after logging in, so it may have been solved, e.g. we are being sensed as being a sponsor, and being redirected to sponsordashboard, so it appears to be working. We will have to fix the 302 redirect error and come back to this problem.
+
+
+##### Understanding Flask-Login
+
+Looking at the [source code for flask-login](https://flask-login.readthedocs.io/en/latest/_modules/flask_login/utils.html#login_fresh) the "current_user" is nothing more than a proxy:
+
+```
+#: A proxy for the current user. If no user is logged in, this will be an
+#: anonymous user
+
+current_user = LocalProxy(lambda: _get_user())
+```
+
+The get_user() function is:
+
+```
+def _get_user():
+    if has_request_context() and not hasattr(_request_ctx_stack.top, 'user'):
+        current_app.login_manager._load_user()
+
+    return getattr(_request_ctx_stack.top, 'user', None)
+```
+
+Source code for [login_manager.-load-user() can be found here](https://flask-login.readthedocs.io/en/latest/_modules/flask_login/login_manager.html#LoginManager).
+
+Which, if we look at that we see that:
+
+```
+    def _load_user(self):
+        '''Loads user from session or remember_me cookie as applicable'''
+
+        if self._user_callback is None and self._request_callback is None:
+            raise Exception(
+                "Missing user_loader or request_loader. Refer to "
+                "http://flask-login.readthedocs.io/#how-it-works "
+                "for more info.")
+```
+
+So basically it uses remember_me, a cookie based function, rather than checking the database. There is [documentation for remember_me here](https://flask-login.readthedocs.io/en/latest/#remember-me).
+
+Fromn the flask-login documentation, we see that:
+
+> “Remember Me” functionality can be tricky to implement. However, Flask-Login makes it nearly transparent - just pass remember=True to the login_user call. A cookie will be saved on the user’s computer, and then Flask-Login will automatically restore the user ID from that cookie if it is not in the session. The amount of time before the cookie expires can be set with the REMEMBER_COOKIE_DURATION configuration or it can be passed to login_user. The cookie is tamper-proof, so if the user tampers with it (i.e. inserts someone else’s user ID in place of their own), the cookie will merely be rejected, as if it was not there.
+
+So would hypothetically pass "remember=False" to login_user rather than worry about filtering the right type of user to the right section. Basically we could require users to log in even after they close their browser.
+
+## Returning to Routing, Pages, Views
+
+
+---\/---
+
+
+```
+    # Bypass if user is logged in
+    if current_user.is_authenticated:
+        # get user number
+        
+        # get user type
+        usertype_check = User.query.filter_by(=).first()
+
+        # based upon user type, route to location
+        if current_user.user_type=='sponsor':
+            return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+        elif current_user.user_type=='editor':
+            return redirect(url_for('editor_bp.dashboard_editor'))
+
+```
+
+### Routing Issues on "/"
+
 Of course, once we do this, we have a routing problem, we had previously been routing through to main_bp, via this dashboard, but we no longer have a, "main" dashboard.
 
 ```
@@ -2631,14 +2878,6 @@ The user is being redirected to the main_bp.dashboard. Instead we need to check 
 The next_page argument may not even matter, because we are not redirecting to a "next_page or..."
 
 Note - there are some specifics in how SQLAlchemy is able to query columns in the database.
-
-```
-user.user_type=='sponsor':
-```
-...works because we are querying, in a pythonic way, one specific instance of user which was queried above with User.query.filter_by(email).first...(rough outline)  - which shows that we pulled the User class instance out into user, and then were able to index that instance with user.usertype.
-
-* [Query Documentation](https://docs.sqlalchemy.org/en/13/orm/query.html)
-* [User.query.get](https://docs.sqlalchemy.org/en/13/orm/query.html#sqlalchemy.orm.query.Query.get) is evidently there to return an instance based upon the primary key identifier.
 
 ##### Main Route "/" Change to Sponsor
 
@@ -2715,7 +2954,25 @@ Which still created an error.
 What was really happening was that both the function and the template had to be renamed, and share the same name. Therefore on routes.py we had to change our @sponsor.bp route for "/" to:
 
 ```
-@sponsor_bp.route('/', methods=['GET'])
+@sponsor_bp.route('/sponsordashboard', methods=['GET'])
+@login_required
+def dashboard_sponsor():
+    """Logged-in User Dashboard."""
+    return redirect(url_for('sponsor_bp.dashboard_sponsor'))
+```
+
+Basically it seems that we have multiple redirects to "/" and we can't do that.  We have to actually have unique pages.
+
+
+##### 302 Redirect Error on /sponsordashboard
+
+Once we have the above fixed, we get a repeating 302 error on /sponsordashboard.
+
+Basically, we set up our route for /sponsordashboard, but it looked like this:
+
+```
+
+@sponsor_bp.route('/sponsordashboard', methods=['GET'])
 @login_required
 def dashboard_sponsor():
     """Logged-in User Dashboard."""
@@ -2723,7 +2980,139 @@ def dashboard_sponsor():
 
 ```
 
-Basically it seems
+So what was happening, was a circular redirect, we were being redirected back to this webpage again and again with that redirect() function.  Instead we needed to add a render_template:
+
+##### werkzeug.routing.BuildError: Could not build url for endpoint 'main_bp.logout'
+
+Basically, we had deleted main_bp.logout to clear another error.  Now we need it back.
+
+However, once we add it back in again, we get the error:
+
+> AssertionError: View function mapping is overwriting an existing endpoint function: main_bp.logout
+
+Which is what we had previously.  Reading more carefully into this error, the, "vew function" appears to refer to the jinja2 file, which has:
+
+```
+<a href="{{ url_for('main_bp.logout') }}">Log Out.</a>
+```
+If we look in our main template folder, under "/project/templates", we can see that there seems to no longer be a logout.jinja2 anymore, so we probably just need to put this back in.
+
+Evidently there is something called a, ["View Decorator" within flask](https://flask.palletsprojects.com/en/1.1.x/patterns/viewdecorators/).
+
+> Because each view in Flask is a function, decorators can be used to inject additional functionality to one or more functions. The route() decorator is the one you probably used already. But there are use cases for implementing your own decorator. For instance, imagine you have a view that should only be used by people that are logged in. If a user goes to the site and is not logged in, they should be redirected to the login page. This is a good example of a use case where a decorator is an excellent solution.
+
+The flask-login [logout_user function](https://flask-login.readthedocs.io/en/latest/_modules/flask_login/utils.html#logout_user) seems to have some conflict.
+
+Logout route:
+
+```
+@main_bp.route("/logout")
+@login_required
+def logout():
+    """User log-out logic."""
+    logout_user()
+    return redirect(url_for('auth_bp.login'))
+```
+
+The docs mention that @login_required is a decorated view.
+
+The place where this error seems to leave anything we have written is here:
+
+```
+flask  |   File "/usr/src/app/project/__init__.py", line 44, in create_app
+flask  |     app.register_blueprint(routes.main_bp)
+
+```
+
+Basically, as the blueprint is being registered, there is an error.  Doing some more Googling on the topic, we come up with [this Stackoverflow article](https://stackoverflow.com/questions/34865873/assertionerror-view-function-mapping-is-overwriting-an-existing-endpoint-functi):
+
+Which says:
+
+> This error is because you are cyclic import app (you imported app in routes.py and imported routes.py in app) This pattern doesn't work and is not correct. In flask you can write the whole application in single file or you can use flask blueprints to make in modular
+
+So basically, we need to register the sponsor_bp and editor_bp rather than import them as from .routes in the auth.py file.
+
+Take this out of auth.py:
+
+```
+# import sponsor and editor blueprints, which includes custom sign-in and sign-up blueprints
+from .routes import sponsor_bp, editor_bp
+```
+Then within __init__.py put under the app_context() function:
+
+```
+        # Register Blueprints
+        app.register_blueprint(routes.main_bp)
+        app.register_blueprint(auth.auth_bp)
+        app.register_blueprint(routes.sponsor_bp)
+        app.register_blueprint(routes.editor_bp)
+
+```
+
+Once we do this, it appears to clear our conflicting logout route, which appears to have been due to a cyclic import.  However now we have:
+
+"flask  | NameError: name 'sponsor_bp' is not defined"
+
+##### NameError: name 'sponsor_bp' is not defined
+
+Basically we're getting this error now because we are not importing the blueprints.
+
+So we can instead try to add the blueprints ad-hoc on auth.py, since we are using them anyway.
+
+```
+# Sponsor Blueprint
+sponsor_bp = Blueprint(
+    'sponsor_bp', __name__,
+    template_folder='templates_sponsors',
+    static_folder='static'
+)
+
+# Editor Blueprint
+editor_bp = Blueprint(
+    'editor_bp', __name__,
+    template_folder='templates_editors',
+    static_folder='static'
+)
+```
+
+Once we do this, we are back to:
+
+```
+ssertionError: View function mapping is overwriting an existing endpoint function: main_bp.logout
+```
+Looking at the imports on auth.py, we see that we have the logout function imported at the top:
+
+```
+from flask_login import login_required, logout_user, current_user, login_user
+```
+However, there is no logout happening here in this function.  So we can try to remove it.  However, this just results in the same error.
+
+Perhaps we need two different logout URLs for sponsor and for editor, or logout needs to be part of auth.py.
+
+##### Finalizing Logout as Sponsor
+
+So in the end, the final way of allowing a sponsor to logout was basically to create a completely different route for sponsor logout:
+
+```
+@sponsor_bp.route("/logoutsponsor")
+@login_required
+def logoutsponsor():
+    """User log-out logic."""
+    logout_user()
+    return redirect(url_for('auth_bp.login'))
+
+@sponsor_bp.route('/sponsordashboard', methods=['GET'])
+@login_required
+def dashboard_sponsor():
+    """Logged-in User Dashboard."""
+    return render_template(
+        'dashboard_sponsor.jinja2',
+        title='Sponsor Dashboard',
+        template='layout',
+        body="Welcome to the Sponsor Dashboard."
+    )
+
+```
 
 ##### Main Route /login
 
@@ -2734,17 +3123,16 @@ Basically it seems
         if current_user.
         return redirect(url_for('main_bp.dashboard'))
 ```
-So where is current_user coming from?
+So where is current_user coming from?  This was an issue at one point, and it was basically due to the vagaries of what current_user really meant, and how it came from flask-login instead of SQLAlchemy-flask.  This was diagnosed and solved above.
 
+##### LoginForm() and SignupForm()
 
-
-
-##### LoginForm()
+I was able to use the same LoginForm for both users. The login form just gets imported
 
 
 ### Changing routes.py
 
-
+The main hangup here was that the /logout route seemed to already be used by some internal Flask process or by perhaps flask-login, so we couldn't seem to use it with all of our different blueprints.  I had to create my own new route specifically for logouts by user type at /sponsorlogout and /editorlogout so that the name didn't conflict.
 
 ## Creating, Editing and Deleting Documents
 
@@ -2786,8 +3174,7 @@ To create the logic behind what user can see which dashboard, I used [Lucid onli
 
 > presents a system of representing the primitive constructs of the relational database directly without opinion, the ORM presents a high level and abstracted pattern of usage, which itself is an example of applied usage of the Expression Language.
 
-
-
+* [SQL Statements and Expressions](https://docs.sqlalchemy.org/en/13/core/expression_api.html)
 
 ## References
 
