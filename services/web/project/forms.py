@@ -70,4 +70,4 @@ class NewDocumentForm(FlaskForm):
         'Document Body',
         validators=[Optional()]
     )
-    save = SubmitField('Save')
+    submit = SubmitField('Submit')

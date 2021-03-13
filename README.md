@@ -3379,6 +3379,8 @@ class NewDocumentForm(FlaskForm):
 ```
 This may be another case where I need to [read the wft documentation extensively](https://wtforms.readthedocs.io/en/2.3.x/forms/#using-forms) in order to solve this simple problem.
 
+There isn't much documentation, but here is a [tutorial on WTF-flask](https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-iii-web-forms/page/9).
+
 
 #### Explicitly Defining Document Retentions
 

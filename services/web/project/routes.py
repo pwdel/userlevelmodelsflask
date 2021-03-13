@@ -66,15 +66,16 @@ def newdocument_sponsor():
             document_name=form.document_name.data,
             document_body='world'
             )
-            
         # add and commit new document
         db.session.add(newdocument)
         db.session.commit()
-
          # message included in the route python function
         message = "New Document saved. Create another document if you would like."
         # if everything goes well, they will be redirected to newdocument
-     
+            return render_template('dashboard_sponsor.jinja2',
+                form=form
+                )
+
     return render_template('newdocument_sponsor.jinja2',
         form=form
         )
