@@ -59,7 +59,7 @@ def logouteditor():
     logout_user()
     return redirect(url_for('auth_bp.login'))
 
-@sponsor_bp.route('/editordashboard', methods=['GET'])
+@editor_bp.route('/editordashboard', methods=['GET'])
 @login_required
 def dashboard_editor():
     """Logged-in User Dashboard."""
