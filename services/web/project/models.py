@@ -63,7 +63,7 @@ class User(db.Model):
 
     """backreferences User class on retentions table"""    
     documents = relationship(
-        'Retentions',
+        'Retention',
         back_populates='user'
         )
 
@@ -153,20 +153,21 @@ class Document(db.Model):
     )
     """backreferences User class on retentions table"""
     users = relationship(
-        'Retentions',
+        'Retention',
         back_populates='document'
         )
 
 
 """Association Object - User Retentions of Documents"""
-class Retentions(db.Model):
+class Retention(db.Model):
     """Model for who retains which document"""
     """Associate database."""
     __tablename__ = 'retentions'
 
     id = db.Column(
         db.Integer, 
-        primary_key=True
+        primary_key=True,
+        autoincrement=True
     )
 
     sponsor_id = db.Column(
@@ -174,7 +175,7 @@ class Retentions(db.Model):
         db.ForeignKey('users.id'),
         primary_key=True,
         unique=False,
-        nullable=False
+        nullable=True
     )
 
 #    editor_id = db.Column(
@@ -189,7 +190,7 @@ class Retentions(db.Model):
         db.ForeignKey('documents.id'),
         primary_key=True,
         unique=False,
-        nullable=False
+        nullable=True
     )
 
     """backreferences to user and document tables"""

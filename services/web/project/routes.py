@@ -3,7 +3,7 @@ from flask import Blueprint, redirect, render_template, flash, request, session,
 from flask_login import current_user, login_required
 from flask_login import logout_user
 from .forms import NewDocumentForm
-from .models import db, Document
+from .models import db, Document, User, Retention
 
 # Blueprint Configuration
 # we define __name__ as the main blueprint, and the templates/static folder.
@@ -66,9 +66,26 @@ def newdocument_sponsor():
             document_name=form.document_name.data,
             document_body=form.document_body.data
             )
+        
         # add and commit new document
         db.session.add(newdocument)
         db.session.commit()
+
+        # after this document has just been added to the database, add retention
+        # newdocument_id = newdocument.id
+        newdocument_id = 1
+        # get the current userid
+        user_id = 1
+        # create a new retention entry
+        newretention = Retention(
+            sponsor_id=user_id,
+            document_id=newdocument_id
+            )
+        
+        # add retention to session and commit to database
+        db.session.add(newretention)
+        db.session.commit()
+
          # message included in the route python function
         message = "New Document saved. Create another document if you would like."
         # if everything goes well, they will be redirected to newdocument

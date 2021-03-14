@@ -3386,15 +3386,182 @@ After starting this tutorial, I found the solution, which was decivingly simple.
 ```
       <form method="POST" action="">
 ```
+Then, updating how the data is captured from the form in our routes.py, we get:
 
+```
+def newdocument_sponsor():
+    
+    # new document form
+    form = NewDocumentForm()
+    
+    if form.validate_on_submit():
+        # take new document
+        # create new document
+        newdocument = Document(
+            document_name=form.document_name.data,
+            document_body=form.document_body.data
+            )
+        # add and commit new document
+        db.session.add(newdocument)
+        db.session.commit()
+         # message included in the route python function
+        message = "New Document saved. Create another document if you would like."
+        # if everything goes well, they will be redirected to newdocument
+        return render_template('dashboard_sponsor.jinja2', form=form)
+
+    return render_template('newdocument_sponsor.jinja2',form=form)
+```
+
+"validate_on_submit" may have been a critical part of how this pulled together.
 
 #### Explicitly Defining Document Retentions
 
+Once documents can successfully be created, the question arises - who owns these documents?  It's one thing to be able to write a document and throw it into a pile, it's another thing to be able to sort them by author (and editor).
 
-#### Creating Form Validation
+My initial thought would be that this needs to be a piece of logic, or db.session.add to the retentions table within routes.py, based upon the current user (sponsor).
+
+The first logical step is to import the 'Retention' and 'User' classes to routes.py.  We previously had named "Retention," "Retentions" but need to change the word to singluar rather than plural for consistency with, "User" and "Document" classes.
+
+```
+from .models import db, Document, Retention
+```
+
+Then, within the validate_on_submit conditional function of the, "new document" route, in psuedocode...
+
+```
+if form.validate_on_submit():
+        # take new document
+        # create new document
+        newdocument = Document(
+            document_name=form.document_name.data,
+            document_body=form.document_body.data
+            )
+
+        # get current user (sponsor) id
+
+        # populate sponsr id into retentions sponsor_id
+
+        # populate document id into retentions document_id
 
 
-#### Adding Flash Message
+        # add and commit new document
+        db.session.add(newdocument)
+        db.session.commit()
+         # message included in the route python function
+        message = "New Document saved. Create another document if you would like."
+        # if everything goes well, they will be redirected to newdocument
+        return render_template('dashboard_sponsor.jinja2', form=form)
+
+```
+
+##### Getting the Current User ID
+
+Previously within auth.py I had establishe two ways of accessing user information:
+
+1. User query with direct access to data.
+
+```
+user_type = User.query(User.user_type)
+```
+
+2. User Query with filter_by decorator function
+
+```
+user = User.query.filter_by(email=form.email.data).first() 
+```
+The funny thing is, I don't know for sure if (1) is actually operating or not, as I haven't written any test-based coding to ensure it does anything.
+
+However, (2) for sure is working, because we are able to get a signup/login.
+
+(2) was purely reliant on form data to write a user into the database, not to access any existing database information. So we can build based off of (1) and hopefully it works.
+
+Establishing the user_id:
+
+```
+user_id = User.query(User.id)
+```
+Then populating this id into retentions sponsor_id:
+
+```
+newretention = Retention(
+    sponsor_id=user_id
+    )
+```
+Finally, adding and committing to session/database:
+
+```
+db.session.add(newretention)
+db.session.commit()
+```
+
+Of course the above logic only takes care of the user_id for the Sponsor, but not the document_id, so it's fairly useless.  To finish things out with the document_id as well:
+
+```
+newdocument_id = Document.query(Document.id)
+user_id = User.query(User.id)
+
+newretention = Retention(
+    sponsor_id=user_id,
+    document_id=newdocument_id
+    )
+
+db.session.add(newretention)
+db.session.commit()
+
+```
+
+All of the above seems logical, except for one thing - in order for us to access the Document id, the Document first must have been written into the database and have had an id assigned to it.  So, we have to first add/commit the Document to database, and then access that most recent Document id with the .first() function.
+
+```
+newdocument_id = Document.query(Document.id).first()
+```
+Moreover, the User class can't just come out of nowhere.  Within auth.py we had set the user based upon the information put into forms by the user. We did not persist the user from the function into the operating environment. Once the user was logged in, that's it - we lost who they are.  The function current_user from wtf-flask seems to just be a cookie, and does not seem to mirror the actual User class model, although I might be wrong on that.
+
+Starting out on a simpler level, just attempting to enter in, "document_id" to the retention table, we get the following error:
+
+```
+sqlalchemy.exc.ProgrammingError
+
+sqlalchemy.exc.ProgrammingError: (psycopg2.ProgrammingError) can't adapt type 'Document'
+[SQL: INSERT INTO retentions (document_id) VALUES (%(document_id)s)]
+[parameters: {'document_id': <Document 1>}]
+(Background on this error at: http://sqlalche.me/e/13/f405)
+
+```
+So basically, we're inserting data incorrectly.  If we attempt to set document_id to = 1, we get:
+
+```
+sqlalchemy.exc.IntegrityError
+
+sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "id" of relation "retentions" violates not-null constraint
+DETAIL:  Failing row contains (null, null, 1).
+
+[SQL: INSERT INTO retentions (document_id) VALUES (%(document_id)s)]
+[parameters: {'document_id': 1}]
+(Background on this error at: http://sqlalche.me/e/13/gkpj)
+
+```
+
+So to start off with, we can't even write anything to the retentions table because we have no null values allowed.  Changing that under models.py so that all values are nullable, we still get the error.
+
+So basically, there is no id being written at all in the retentions table.  [This Stackoverflow discussion on sqlalchemy not null constraint failing on primary key](https://stackoverflow.com/questions/34581905/flask-sqlalchemy-not-null-constraint-failed-on-primary-key) showed that we have to set autoincrement equal to true.
+
+```
+class Retention(db.Model):
+    """Model for who retains which document"""
+    """Associate database."""
+    __tablename__ = 'retentions'
+
+    id = db.Column(
+        db.Integer, 
+        primary_key=True,
+        autoincrement=True
+    )
+```
+Now that this table is autoincrementing corretly, the next trick is to associate the sponsor_id columns with the current user_id and document_id that was just created, rather than a fixed number.
+
+
+### Adding Flash Messages
 
 
 
@@ -3403,6 +3570,15 @@ After starting this tutorial, I found the solution, which was decivingly simple.
 We do the same 3 steps we did for the New Document pages for the listing pages to quickly spin up what we need.
 
 
+### Editing, Saving, Deleting Documents
+
+
+
+### Creating a Dropdown for Documents
+
+
+
+### 
 
 
 ## Logical Flows Diagramming - Summarization
@@ -3430,6 +3606,7 @@ We have all of the above built now, so it's time to introduce documents.
 
 * [SQL Statements and Expressions](https://docs.sqlalchemy.org/en/13/core/expression_api.html)
 * Dynamically creating pages on routes. So for example, once we are in the sponsor dashboard, rather than calling it, /sponsordashboard we call it /sponsor/dashboard. Going further, once we create new items, such as document1, we have that hosted at /sponsor/documents/document1, for example, with some kind of dynamic naming system such as /sponsor/documents/<doc1>.  However if the optimal system would be using a static page with a loader, do that instead.
+* Adding flash messages to form.
 
 ## References
 
