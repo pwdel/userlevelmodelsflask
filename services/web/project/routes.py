@@ -64,7 +64,7 @@ def newdocument_sponsor():
         # create new document
         newdocument = Document(
             document_name=form.document_name.data,
-            document_body='world'
+            document_body=form.document_body.data
             )
         # add and commit new document
         db.session.add(newdocument)
@@ -72,13 +72,9 @@ def newdocument_sponsor():
          # message included in the route python function
         message = "New Document saved. Create another document if you would like."
         # if everything goes well, they will be redirected to newdocument
-            return render_template('dashboard_sponsor.jinja2',
-                form=form
-                )
+        return render_template('dashboard_sponsor.jinja2', form=form)
 
-    return render_template('newdocument_sponsor.jinja2',
-        form=form
-        )
+    return render_template('newdocument_sponsor.jinja2',form=form)
 
 # ---------- editor user routes ----------
 

@@ -3381,6 +3381,12 @@ This may be another case where I need to [read the wft documentation extensively
 
 There isn't much documentation, but here is a [tutorial on WTF-flask](https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-iii-web-forms/page/9).
 
+After starting this tutorial, I found the solution, which was decivingly simple.  Basically, the "action" at the top of the form on the form template should just be blank. Previously we had it leading to, /sponsor/dashboard, however it seems that somehow this action was screwing up the way data was going into the form, the action being taken was to, "POST" to the URL rather than just POST in general.  The final form this was written is as follows, at the top of the form on the .jinja2 template:
+
+```
+      <form method="POST" action="">
+```
+
 
 #### Explicitly Defining Document Retentions
 
