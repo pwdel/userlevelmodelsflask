@@ -3129,7 +3129,6 @@ So where is current_user coming from?  This was an issue at one point, and it wa
 
 I was able to use the same LoginForm for both users. The login form just gets imported
 
-
 ### Changing routes.py
 
 The main hangup here was that the /logout route seemed to already be used by some internal Flask process or by perhaps flask-login, so we couldn't seem to use it with all of our different blueprints.  I had to create my own new route specifically for logouts by user type at /sponsorlogout and /editorlogout so that the name didn't conflict.
@@ -3149,15 +3148,446 @@ If we look at this [Flask Blog Example Github Source Code](https://github.com/go
 
 Basically, it isn't well-organized and there is not a lot of documentation regarding how it should be organized.
 
-However, the convention they seem to use is put a lot of processes into, "Blogging Engine."  We could likewise, create an, "Engine" however we might just call it a, "DocumentEngine," within engine.py.
+However, the convention they seem to use is put a lot of processes into, "Blogging Engine."  We could likewise, create an, "Engine" however we might just call it a, "DocumentEngine," within engine.py.  That being said, "engine.py" is used for a lot of programs and could mean a lot of things, so perhaps we may want to just start a, "documents.py" file.
 
-## Logical Flows
+### Starting with Sponsor Dashboard - Creating Documents
+
+The place I would like to start is simply the Sponsor Dashboard - to create links to additional pages where were can create new documents.
+
+The main page of the sponsor dashboard looks like [this](/readme_img/SponsorDashboard.png) - so we basically just need two links to:
+
+* Document Creation Page
+* Document Listing Page
+
+Steps to Quickly Create Document Creation Page without functionality:
+
+1. Create Jinja2 Template for newdocument.jinja2
+2. Create /sponsor/newdocument route which renders the Jinja2 template.
+3. Make sure links to new pages using, {{ url_for('sponsor_bp.newdocument_sponsor') }} link to the templates and functions, not the routes. the url_for function points toward assets and functions, not toward URL's, that's why it's "url for."
+
+#### New Document Form
+
+While there are much better ways of creating documents with all sorts of markdown editors, we're just going to start out with a simple form.
+
+The form needs to correspond to the Document class, which means we need a "document_name" and a "body." We also need a save button.
+
+Overall, the steps to create a new form displaying, without functionality included:
+
+1. Create thew NewDocumentForm
+2. Import "from .forms import NewDocumentForm" on routes.py.
+3. Author and adapt the form on our .jinja2 template.
+4. Include form=form under render_template within the routes function.
+
+#### New Document Form Logic
+
+Once we have the new document form ready to go, we need to create extended functionality to be able to insert the data from the form into the database, and then reroute the user back to the sponsor dashboard.
+
+Furthermore, we want to be able to assign this document to the User (Sponsor) who created the document, through the relational associaton table (retentions), automatically.
+
+We can use [this python-flask tutorial on creating forms with flask/SQLAlchemy](https://python-adv-web-apps.readthedocs.io/en/latest/flask_db3.html) to help us out.
+
+Filling out the form data includes a couple steps, using SQLAlchemy.  First, we have to put the form data into a variable which follows our Document class from models.py:
+
+```
+            # create new document
+            newdocument = Document(
+                document_name=form.document_name.data,
+                document_body=form.document_body.data
+            )
+```
+We then need to commit the record to the database
+```
+            # add and commit new document
+            db.session.add(newdocument)
+            db.session.commit()
+```
+Finally, we can flash a success message and ask to create another document.  Basically, we're just rendering the same document again.
+
+```
+# message included in the route python function
+            message = "New Document saved. Create another document if you would like."
+            return render_template('newdocument_sponsor.jinja2',
+        form=form
+        )
+```
+
+Pulling it all together:
+
+```
+    # create new document
+    form = NewDocumentForm()
+    newdocument = Document(
+        document_name=form.document_name.data,
+        document_body=form.document_body.data
+    )
+    # add and commit new document
+    db.session.add(newdocument)
+    db.session.commit()
+
+    # message included in the route python function
+    message = "New Document saved. Create another document if you would like."
+
+    return render_template('newdocument_sponsor.jinja2',
+    form=form
+    )
+```
+
+When we put the above under our new route, we get an error that, "Document" is not defined - which is because we didn't import this from the database. So we have to do the import:
+
+"from .models import db, Document"
+
+However, once we import Document, we get an error from sqlalchemy:
+
+```
+column "document_body" of relation "documents" does not exist
+```
+The reason for this was because I was running the database without having updated it, after updating the column name, "body" to, "document_body."  After restarting the database, this error cleared - however, the not-null constraint of the document_name threw another error.  Basically, the document name can't start off as blank and yet we have a not null constraint.
+
+We can eliminate null document names later through validation, so it's easier to just change the constraint for now.
+
+The above seemed to work, and the form itself saved and worked, however we are now routed to a page that doesn't exist. 
+
+This was because under newdocument_sponsor.jinja2 we had put:
+
+```
+      <form method="POST" action="/newdocumentsave">
+```
+Which redirects us to a non-existant page, /newdocumentsave
+
+Typically with forms being filled out, there is at least some kind of validation, which uses the function, "if form.validate_on_submit():" 
+
+However, even if we redirect to a proper page, we get a, "Method not allowed" error.  This is because we are only allowing, "GET" as a method within our routes, and we need to add, "POST" as well.
+
+```
+@sponsor_bp.route('/sponsor/newdocument', methods=['GET','POST'])
+
+AND
+
+@sponsor_bp.route('/sponsor/dashboard', methods=['GET','POST'])
+```
+After this, we were able to add new documents.
+
+Now, how do we inspect the documents from the command line while running the docker instance with flask on it in the terminal already?
+
+There is a very simple command, we just have to know the database name.  The database name can be found via:
+
+```
+sudo docker ps -a
+```
+From there given that the name is "db", and we get the database name and username from docker-compose.yml do:
+
+```
+sudo docker exec -it db psql -d userlevels_flask_dev -U userlevels_flask
+```
+Generalized this is:
+
+```
+sudo docker exec -it DOCKERNAME psql -d DATABASENAME -U USERNAME
+```
+Once we are in the shell, we can do (don't forget the semicolons):
+
+```
+userlevels_flask_dev=# SELECT * FROM users;
+
+userlevels_flask_dev=# SELECT * FROM documents;
+
+```
+However, when we do this, we see our user, test@test.com but we don't see any documents.  So this means that documents are not being created, there are not even id's being assigned.
+
+When we take out our, "validate_on_submit" logic, which is not needed at this time because we don't have any form validation, it creates document id's however they are blank document_names and document_body.  This may be because we are not importing using, "session" from Flask.
+
+```
+from flask import Blueprint, redirect, render_template, flash, request, session, url_for
+```
+This did nothing.  Somehow we are "grabbing" blank data.  We are successfully writing that blank data, but the data that we are grabbing is blank, which suggests that there is a problem with the form or interface between the form and the command.
+
+If we instead:
+
+```
+    newdocument = Document(
+        document_name= request.form.get('document_name'),
+        document_body= request.form.get('document_body')
+        )
+
+```
+
+Changing to the above still results in blank data.
+
+The problem evidently is in the flask form, which was written as:
+
+```
+class NewDocumentForm(FlaskForm):
+    """Create New Document Form."""
+    document_name = StringField(
+        'Document Name',
+        validators=[
+            DataRequired(),
+            Email(message='Enter the Name of the Document.')
+        ]
+    )
+    document_body = StringField(
+        'Document Body',
+        validators=[
+            DataRequired(),
+            Email(message='Enter Document Content Here.')
+        ]
+    )
+    save = SubmitField('Save')
+```
+The, "Email" validator seems to be hanging things up.  These are not emails, so the form should read:
+
+
+```
+class NewDocumentForm(FlaskForm):
+    """Create New Document Form."""
+    document_name = StringField(
+        'Document Name',
+        validators=[
+            DataRequired()
+        ]
+    )
+    document_body = StringField(
+        'Document Body',
+        validators=[
+            DataRequired()
+        ]
+    )
+    save = SubmitField('Save')
+```
+With those validators out of the way, the form should work, however the .get() functionality may not have been the proper way to get the data from the form.
+
+When we change it back to this method, and take away all validators, we still have blank data going into our database.
+
+```
+from newdocument_sponsor()
+
+    newdocument = Document(
+        document_name=form.document_name.data,
+        document_body=form.document_body.data
+    )
+
+class NewDocumentForm(FlaskForm):
+    """Create New Document Form."""
+    document_name = StringField(
+        'Document Name'
+    )
+    document_body = StringField(
+        'Document Body',
+    )
+    save = SubmitField('Save')
+
+```
+This may be another case where I need to [read the wft documentation extensively](https://wtforms.readthedocs.io/en/2.3.x/forms/#using-forms) in order to solve this simple problem.
+
+There isn't much documentation, but here is a [tutorial on WTF-flask](https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-iii-web-forms/page/9).
+
+After starting this tutorial, I found the solution, which was decivingly simple.  Basically, the "action" at the top of the form on the form template should just be blank. Previously we had it leading to, /sponsor/dashboard, however it seems that somehow this action was screwing up the way data was going into the form, the action being taken was to, "POST" to the URL rather than just POST in general.  The final form this was written is as follows, at the top of the form on the .jinja2 template:
+
+```
+      <form method="POST" action="">
+```
+Then, updating how the data is captured from the form in our routes.py, we get:
+
+```
+def newdocument_sponsor():
+    
+    # new document form
+    form = NewDocumentForm()
+    
+    if form.validate_on_submit():
+        # take new document
+        # create new document
+        newdocument = Document(
+            document_name=form.document_name.data,
+            document_body=form.document_body.data
+            )
+        # add and commit new document
+        db.session.add(newdocument)
+        db.session.commit()
+         # message included in the route python function
+        message = "New Document saved. Create another document if you would like."
+        # if everything goes well, they will be redirected to newdocument
+        return render_template('dashboard_sponsor.jinja2', form=form)
+
+    return render_template('newdocument_sponsor.jinja2',form=form)
+```
+
+"validate_on_submit" may have been a critical part of how this pulled together.
+
+#### Explicitly Defining Document Retentions
+
+Once documents can successfully be created, the question arises - who owns these documents?  It's one thing to be able to write a document and throw it into a pile, it's another thing to be able to sort them by author (and editor).
+
+My initial thought would be that this needs to be a piece of logic, or db.session.add to the retentions table within routes.py, based upon the current user (sponsor).
+
+The first logical step is to import the 'Retention' and 'User' classes to routes.py.  We previously had named "Retention," "Retentions" but need to change the word to singluar rather than plural for consistency with, "User" and "Document" classes.
+
+```
+from .models import db, Document, Retention
+```
+
+Then, within the validate_on_submit conditional function of the, "new document" route, in psuedocode...
+
+```
+if form.validate_on_submit():
+        # take new document
+        # create new document
+        newdocument = Document(
+            document_name=form.document_name.data,
+            document_body=form.document_body.data
+            )
+
+        # get current user (sponsor) id
+
+        # populate sponsr id into retentions sponsor_id
+
+        # populate document id into retentions document_id
+
+
+        # add and commit new document
+        db.session.add(newdocument)
+        db.session.commit()
+         # message included in the route python function
+        message = "New Document saved. Create another document if you would like."
+        # if everything goes well, they will be redirected to newdocument
+        return render_template('dashboard_sponsor.jinja2', form=form)
+
+```
+
+##### Getting the Current User ID
+
+Previously within auth.py I had establishe two ways of accessing user information:
+
+1. User query with direct access to data.
+
+```
+user_type = User.query(User.user_type)
+```
+
+2. User Query with filter_by decorator function
+
+```
+user = User.query.filter_by(email=form.email.data).first() 
+```
+The funny thing is, I don't know for sure if (1) is actually operating or not, as I haven't written any test-based coding to ensure it does anything.
+
+However, (2) for sure is working, because we are able to get a signup/login.
+
+(2) was purely reliant on form data to write a user into the database, not to access any existing database information. So we can build based off of (1) and hopefully it works.
+
+Establishing the user_id:
+
+```
+user_id = User.query(User.id)
+```
+Then populating this id into retentions sponsor_id:
+
+```
+newretention = Retention(
+    sponsor_id=user_id
+    )
+```
+Finally, adding and committing to session/database:
+
+```
+db.session.add(newretention)
+db.session.commit()
+```
+
+Of course the above logic only takes care of the user_id for the Sponsor, but not the document_id, so it's fairly useless.  To finish things out with the document_id as well:
+
+```
+newdocument_id = Document.query(Document.id)
+user_id = User.query(User.id)
+
+newretention = Retention(
+    sponsor_id=user_id,
+    document_id=newdocument_id
+    )
+
+db.session.add(newretention)
+db.session.commit()
+
+```
+
+All of the above seems logical, except for one thing - in order for us to access the Document id, the Document first must have been written into the database and have had an id assigned to it.  So, we have to first add/commit the Document to database, and then access that most recent Document id with the .first() function.
+
+```
+newdocument_id = Document.query(Document.id).first()
+```
+Moreover, the User class can't just come out of nowhere.  Within auth.py we had set the user based upon the information put into forms by the user. We did not persist the user from the function into the operating environment. Once the user was logged in, that's it - we lost who they are.  The function current_user from wtf-flask seems to just be a cookie, and does not seem to mirror the actual User class model, although I might be wrong on that.
+
+Starting out on a simpler level, just attempting to enter in, "document_id" to the retention table, we get the following error:
+
+```
+sqlalchemy.exc.ProgrammingError
+
+sqlalchemy.exc.ProgrammingError: (psycopg2.ProgrammingError) can't adapt type 'Document'
+[SQL: INSERT INTO retentions (document_id) VALUES (%(document_id)s)]
+[parameters: {'document_id': <Document 1>}]
+(Background on this error at: http://sqlalche.me/e/13/f405)
+
+```
+So basically, we're inserting data incorrectly.  If we attempt to set document_id to = 1, we get:
+
+```
+sqlalchemy.exc.IntegrityError
+
+sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "id" of relation "retentions" violates not-null constraint
+DETAIL:  Failing row contains (null, null, 1).
+
+[SQL: INSERT INTO retentions (document_id) VALUES (%(document_id)s)]
+[parameters: {'document_id': 1}]
+(Background on this error at: http://sqlalche.me/e/13/gkpj)
+
+```
+
+So to start off with, we can't even write anything to the retentions table because we have no null values allowed.  Changing that under models.py so that all values are nullable, we still get the error.
+
+So basically, there is no id being written at all in the retentions table.  [This Stackoverflow discussion on sqlalchemy not null constraint failing on primary key](https://stackoverflow.com/questions/34581905/flask-sqlalchemy-not-null-constraint-failed-on-primary-key) showed that we have to set autoincrement equal to true.
+
+```
+class Retention(db.Model):
+    """Model for who retains which document"""
+    """Associate database."""
+    __tablename__ = 'retentions'
+
+    id = db.Column(
+        db.Integer, 
+        primary_key=True,
+        autoincrement=True
+    )
+```
+Now that this table is autoincrementing corretly, the next trick is to associate the sponsor_id columns with the current user_id and document_id that was just created, rather than a fixed number.
+
+
+### Adding Flash Messages
+
+
+
+### Listing Existing Documents
+
+We do the same 3 steps we did for the New Document pages for the listing pages to quickly spin up what we need.
+
+
+### Editing, Saving, Deleting Documents
+
+
+
+### Creating a Dropdown for Documents
+
+
+
+### 
+
+
+## Logical Flows Diagramming - Summarization
 
 To create the logic behind what user can see which dashboard, I used [Lucid online flowcharts](https://lucid.app/documents#/dashboard).
 
 ![](/readme_img/logical.png)
 
-
+We have all of the above built now, so it's time to introduce documents.
 
 ## Future Work
 
@@ -3175,6 +3605,8 @@ To create the logic behind what user can see which dashboard, I used [Lucid onli
 > presents a system of representing the primitive constructs of the relational database directly without opinion, the ORM presents a high level and abstracted pattern of usage, which itself is an example of applied usage of the Expression Language.
 
 * [SQL Statements and Expressions](https://docs.sqlalchemy.org/en/13/core/expression_api.html)
+* Dynamically creating pages on routes. So for example, once we are in the sponsor dashboard, rather than calling it, /sponsordashboard we call it /sponsor/dashboard. Going further, once we create new items, such as document1, we have that hosted at /sponsor/documents/document1, for example, with some kind of dynamic naming system such as /sponsor/documents/<doc1>.  However if the optimal system would be using a static page with a loader, do that instead.
+* Adding flash messages to form.
 
 ## References
 

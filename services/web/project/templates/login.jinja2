@@ -26,6 +26,7 @@
     <h1>Log In</h1>
 
     <form method="POST" action="/login">
+
       {{ form.csrf_token }}
 
       <fieldset class="email">
@@ -54,6 +55,8 @@
         {{ form.submit }}
       </div>
 
+    </form>
+
       <div class="login-signup">
         <p></p>
         <span>Don't have an account?</span>
@@ -64,7 +67,6 @@
         <p></p>
       </div>
 
-    </form>
   </div>
 
 {% endblock %}
