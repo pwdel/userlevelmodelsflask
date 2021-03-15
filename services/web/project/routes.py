@@ -83,7 +83,7 @@ def newdocument_sponsor():
         newdocument_id = last_document.id
 
         # get the current userid
-        user_id = 1
+        user_id = current_user.id
         # create a new retention entry
         newretention = Retention(
             sponsor_id=user_id,

@@ -3875,13 +3875,83 @@ Documentation:
 [Document.query.first()](https://docs.sqlalchemy.org/en/13/orm/query.html#sqlalchemy.orm.query.Query.first)
 [Document.query.get()](https://docs.sqlalchemy.org/en/13/orm/query.html#sqlalchemy.orm.query.Query.get)
 
-### Adding Flash Messages
+The final string of code to make everything work with the retentions table was:
 
+```
+# after this document has just been added to the database, add retention
+# query all documents in order, put into a python object
+all_documents_ordered = Document.query.order_by(Document.id)
+# query count of all documents, subtract 1 because python index starts at 0
+document_index = Document.query.count() - 1
+# last document object is document index, or count-1
+last_document = all_documents_ordered[document_index]
+# new document id for retentions database is indexed last documentid integer
+newdocument_id = last_document.id
+
+```
+Now, to get user id's, we need a different method.  User Id's are not something that can be pulled out of a, "most recent stack."  The userid is specific to the user in question who happens to be utilizing the app not only at this time, but in future instances.
+
+Looking at [this Stackexchange question on finding the current user in SQLAlchemy](https://stackoverflow.com/questions/47038961/sqlalchemy-current-db-user), there is evidently a database specific, literal way to find the current user.
+
+So first off, if we look at our database object, db:
+
+```
+>>> db                                                                                                                                  
+<SQLAlchemy engine=postgresql://userlevels_flask:***@db:5432/userlevels_flask_dev>
+```
+We can see that we can access this.
+
+```
+>>> db.session.query(literal_column("current_user"))
+```
+
+However, to start off with, "literal_column" is not defined. We need to import this. The [literal_column comes from the sqlalchemy core](https://docs.sqlalchemy.org/en/14/core/sqlelement.html#sqlalchemy.sql.expression.literal_column).
+
+```
+from sqlalchemy import literal_column 
+
+current_user_object = db.session.query(literal_column("current_user"))
+
+<flask_sqlalchemy.BaseQuery object at 0x7f4f98549c40>
+
+```
+The problem is, this seems to be pulling out the database user, rather than the logged in user within our app.
+
+```
+>>> current_user_object[0]                                                                                                             
+('userlevels_flask',)
+```
+If we use the flask-login module, we can't test it out on our python terminal, because the user is, "none" since we're not logged into the app.
+
+Evidently, we can actually get the user-id by indexing current_user.
+
+```
+        # get the current userid
+        user_id = current_user.id
+```
+In order to test this out, we have to create a seperate sponsor user, log back in as that user, and create a new document. If we look at the retentions table, we should see a new document tied to a new user.
+
+After logging back in and logging out again, from user1 to user2, and creating two new documents each, the retentions table looks like this:
+
+```
+userlevels_flask_dev=# SELECT * FROM retentions;                                                                                        
+ id | sponsor_id | document_id                                                                                                          
+----+------------+-------------                                                                                                         
+  1 |          1 |           1                                                                                                          
+  2 |          2 |           2                                                                                                          
+  3 |          2 |           3                                                                                                          
+  4 |          1 |           4 
+```
+So basically, it works!
 
 
 ### Listing Existing Documents
 
 We do the same 3 steps we did for the New Document pages for the listing pages to quickly spin up what we need.
+
+
+
+### Adding Flash Messages
 
 
 ### Editing, Saving, Deleting Documents
