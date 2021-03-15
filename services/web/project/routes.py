@@ -101,6 +101,18 @@ def newdocument_sponsor():
 
     return render_template('newdocument_sponsor.jinja2',form=form)
 
+
+@sponsor_bp.route('/sponsor/documentlist', methods=['GET','POST'])
+@login_required
+def documentlist_sponsor():
+    """Logged-in User Dashboard."""
+    return render_template(
+        'documentlist_sponsor.jinja2',
+        title='Sponsor Dashboard',
+        template='layout',
+        body="Welcome to the Sponsor Dashboard."
+    )
+
 # ---------- editor user routes ----------
 
 @editor_bp.route("/editor/logout")

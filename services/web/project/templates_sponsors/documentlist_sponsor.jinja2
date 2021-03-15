@@ -1,0 +1,29 @@
+{% extends "layout.jinja2" %}
+
+{% block content %}
+  <div class="form-wrapper">
+
+    <div class="logo">
+      <img
+        src="{{ url_for('static', filename='img/linguo.jpg') }}"
+        alt="logo"
+      />
+    </div>
+
+    <h1>Documents List</h1>
+
+    <p>This is the list of your documents.</p>
+
+  <p></p>
+  </div>
+      Stuff
+  </div>
+
+  <p></p>
+
+  </div>
+    <a href="{{ url_for('sponsor_bp.dashboard_sponsor') }}">Back to Sponsor Dashboard</a>
+  </div>
+
+
+{% endblock %}

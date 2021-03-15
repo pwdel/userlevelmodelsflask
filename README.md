@@ -3947,19 +3947,92 @@ So basically, it works!
 
 ### Listing Existing Documents
 
-We do the same 3 steps we did for the New Document pages for the listing pages to quickly spin up what we need.
+#### Setup
+
+We do the same 4 steps we did for the New Document pages for the listing pages to quickly spin up what we need.
+
+1. Create new form if needed
+2. Import new form to routes.py or appropriate function.
+3. Author and adapt the form or view on our .jinja2 template, with a new view.
+4. Include form=form under render_template within the routes function, or any other necessary new view.
+
+Of course, that's not all since we are now displaying rather than intaking information, there will also be back end data querying and possibly the creation of some kind of table or grid view.
+
+#### Views / Jinja2 Templates
+
+This is fairly easy and I was able to basically copy and paste previous work.
+
+#### Querying Documents by User with Retention Table
+
+One of the key parts of being able to work with documents on a user by user basis will of course be to query, using the Retention table, which documents belong to which user.
+
+* We know how to get a specific user now, using current_user.id
+* We know that we can look at the retention table, and filter by user_id.
+
+It should be a matter of filtering by user_id on the retention table, and displaying all documents for a given id in a for loop, and putting the results in an array.
+
+We can start off by using the flask shell.
+
+```
+current_user_document_ids = Retention.query.filter_by(sponsor_id=1)
+
+>>> current_user_document_ids[0].document_id                                                                                            
+1                                                                                                                                       
+>>> current_user_document_ids[1].document_id                                                                                           
+2  
+
+```
+So basically we need a count of all of the document_id's available for that user, and then we iterate through the object from that count and "print out" all of the document id's into another array.
+
+Using that array, we can go back and query the actual document names, id's, or whatever other information we would like to display. Since the SQL index starts at 1, and Python for loops count iteratively with a range starting at 0, we don't need to change the count number by subtracting 1.
+
+```
+current_user_document_ids = Retention.query.filter_by(sponsor_id=1)
+document_count = Retention.query.count()
+
+document_id_array=[]
+
+for counter in range(0,document_count):
+    # create document_id_array by appending all user-document-id's
+    document_id_array.append(current_user_document_ids[counter].document_id)
+
+```
+So from the above, "document_id_array" is now an array with the document id's tied to the user in question, which we extracted from the Retention table, in order.  We can now access and print these names with:
+
+```
+>>> Document.query.filter_by(id=1)[0].document_name                                                                                     
+'Document Name 1'                                                                                                                       
+>>> Document.query.filter_by(id=1)[0].document_body                                                                                     
+'Document Body 1' 
+
+```
+Before we build an array or list out of this, it would be helpful to understand what we really need to display this list on a .jinja2 template.
 
 
+#### Displaying Documents in Grid
 
-### Adding Flash Messages
+[The documentation for jinja2 is here](https://jinja.palletsprojects.com/en/2.11.x/).
 
+A basic for loop in Jinja looks like this:
+
+```
+<ul>
+{% for user in users %}
+  <li><a href="{{ user.url }}">{{ user.username }}</a></li>
+{% endfor %}
+</ul>
+```
 
 ### Editing, Saving, Deleting Documents
 
 
 
-### Creating a Dropdown for Documents
 
+### Creating a Dropdown for Adding Editors to Documents
+
+
+
+### Adding Flash Messages
 
 
 ### 
