@@ -2,7 +2,7 @@
 FROM python:3.9-slim-buster
 
 # set the working directory in the container
-WORKDIR /usr/src/app
+WORKDIR /usr/src/theapp
 
 # set environment variables---------------------
 # prevent python from writing pyc files to disk
@@ -23,13 +23,13 @@ RUN apt-get update && apt-get install -y netcat
 RUN pip install --upgrade pip
 
 # copy the content of the local src directory to the working directory
-COPY ./requirements.txt /usr/src/app/requirements.txt
+COPY ./requirements.txt /usr/src/theapp/requirements.txt
 
 # install requirements
 RUN pip install -r requirements.txt
 
 # copy project
-COPY . /usr/src/app/
+COPY . /usr/src/theapp/
 
 # run entrypoint.sh
-ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
+ENTRYPOINT ["/usr/src/theapp/entrypoint.sh"]

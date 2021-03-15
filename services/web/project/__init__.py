@@ -54,12 +54,18 @@ def create_app():
 
         # Compile static assets
         compile_static_assets(assets)
-        
+      
     return app
 
 # Physically create the app now
 app = create_app()
 
+
+from .models import db, Document, User, Retention
+# python shell context processor
+@app.shell_context_processor
+def make_shell_context():
+    return {'db': db, 'User': User, 'Document': Document, 'Retention': Retention}
 
 if __name__ == "__main__":
    app.run(host='0.0.0.0',port=port)

@@ -27,6 +27,7 @@ editor_bp = Blueprint(
     static_folder='static'
 )
 
+
 # when any user goes to /, they get redirected to /login
 @main_bp.route('/', methods=['GET'])
 @login_required
@@ -72,10 +73,17 @@ def newdocument_sponsor():
         db.session.commit()
 
         # after this document has just been added to the database, add retention
-        # newdocument_id = newdocument.id
-        newdocument_id = 1
+        # query all documents in order, put into a python object
+        all_documents_ordered = Document.query.order_by(Document.id)
+        # query count of all documents, subtract 1 because python index starts at 0
+        document_index = Document.query.count() - 1
+        # last document object is document index, or count-1
+        last_document = all_documents_ordered[document_index]
+        # new document id for retentions database is indexed last documentid integer
+        newdocument_id = last_document.id
+
         # get the current userid
-        user_id = 1
+        user_id = current_user.id
         # create a new retention entry
         newretention = Retention(
             sponsor_id=user_id,

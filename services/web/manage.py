@@ -26,5 +26,6 @@ def create_db():
 def test_message():
 	click.echo('hey this is a test message, thanks for reading!')
 
+
 if __name__ == "__main__":
     cli()

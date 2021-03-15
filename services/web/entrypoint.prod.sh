@@ -16,6 +16,8 @@ then
     echo "Creating the database tables..."
     python manage.py create_db
     echo "Tables created"
+    echo "Making the shell context"
+    python manage.py make_shell_context
 fi
 
 exec "$@"
