@@ -3454,7 +3454,7 @@ if form.validate_on_submit():
 
 ```
 
-##### Getting the Current User ID
+##### Getting the Current User ID and Document ID
 
 Previously within auth.py I had establishe two ways of accessing user information:
 
@@ -3560,6 +3560,320 @@ class Retention(db.Model):
 ```
 Now that this table is autoincrementing corretly, the next trick is to associate the sponsor_id columns with the current user_id and document_id that was just created, rather than a fixed number.
 
+###### Working with Filtering
+
+So to first attack the documentID, we can go back to entering in our code which involves filtering and using order_by:
+
+```
+descending = Document.query.order_by(Document.id.desc())
+newdocument_id = descending.first()
+```
+This results in a sqlalchemy error.  If we look closely at the error:
+
+```
+[parameters: {'sponsor_id': 1, 'document_id': <Document 1>}]
+```
+While the sponsor_id appears valid while entering in a value of 1, document_id seems to be giving, <Document 1> which is not valid. This could be because of the .desc() function, which seems to be more of a description than the actual value.
+
+So what if we want to experiment around with SQLAlchemy commands right within a python shell?  That might be a lot faster way of figuring out exactly what does and does not work, rather than guessing and checking code.
+
+It turns out there is a way to get into the flask shell.
+
+```
+Log into the container name "flask"
+
+$ sudo docker exec -it flask /bin/bash
+
+Then enter into flask shell with command "flask shell"
+
+root@1a46f80b993c:/usr/src/app# flask shell
+Python 3.9.1 (default, Jan 12 2021, 16:56:42) 
+[GCC 8.3.0] on linux
+App: project [development]
+Instance: /usr/src/app/instance
+>>> 
+```
+Now we can see if we can use [SQLAlchemy-flask commands directly](https://flask-sqlalchemy.palletsprojects.com/en/2.x/queries/) within this shell first before we write code.
+
+So first, if we try to add a Document object, we do the following:
+
+```
+>>> newdocument = Document(document_name=2,document_body=2)                                                                             
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+NameError: name 'Document' is not defined
+
+```
+When we try to import the models, we get:
+
+```
+>>> from .models import db, Document, User, Retention
+Traceback (most recent call last):                                                                                                      
+  File "<console>", line 1, in <module>                                                                                                 
+KeyError: "'__name__' not in globals" 
+```
+So rather than importing everything one by one, we can use [RequestContext](https://flask.palletsprojects.com/en/1.1.x/api/#flask.ctx.RequestContext) to evaluate all functions registered on the application for teardown execution. The documentation specifies using test_request_context rather than request_context directly.
+
+```
+>>> ctx = app.test_request_context()
+
+We can then work with the ctx if we do:
+
+>>> ctx.push()
+
+We then run:
+
+>>> app.preprocess_request()
+
+until we call "pop"
+
+>>> ctx.pop()
+
+```
+However even with the above, things may still not work.  This is because, per this [Stackoverflow discussion on Flask Shell Commands Not working](https://stackoverflow.com/questions/49626250/flask-shell-commands-not-working), you cannot have a module and a package with the same name.  So basically, we can't have:
+
+```
+/app and app.py at the same time.
+```
+
+We can solve this problem by renaming our app folder within the Dockerfile and docker-compose.yml from:
+
+```
+Dockerfile
+
+# set the working directory in the container
+WORKDIR /usr/src/app
+
+...
+
+# copy the content of the local src directory to the working directory
+COPY ./requirements.txt /usr/src/app/requirements.txt
+
+# install requirements
+RUN pip install -r requirements.txt
+
+# copy project
+COPY . /usr/src/app/
+
+# run entrypoint.sh
+ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
+
+
+docker-compose.yml
+
+    volumes:
+      - ./services/web/:/usr/src/app/
+
+```
+ to something like:
+
+
+```
+Dockerfile
+
+# set the working directory in the container
+WORKDIR /usr/src/theapp
+
+...
+
+# copy the content of the local src directory to the working directory
+COPY ./requirements.txt /usr/src/theapp/requirements.txt
+
+# install requirements
+RUN pip install -r requirements.txt
+
+# copy project
+COPY . /usr/src/theapp/
+
+# run entrypoint.sh
+ENTRYPOINT ["/usr/src/theapp/entrypoint.sh"]
+
+
+docker-compose.yml
+
+    volumes:
+      - ./services/web/:/usr/src/theapp/
+
+```
+
+Of course once we do that, we have to wait through a long build process on Docker, after running the command, "sudo docker-compose up --build".
+
+After doing this, we still get an error when attempting to set a variable for the Document() class. NameError 'Document' is not defined shows up again.
+
+According to the [Miguel Grinberg Tutorial on Databases within Flask](https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-iv-database) we actually have to create a shell_context_processor function within our app in order to run it with the context we are looking for.
+
+```
+from app import app, db
+from project.models import User, Document, Retention
+
+@app.shell_context_processor
+def make_shell_context():
+    return {'db': db, 'User': User, 'Post': Post}
+```
+
+Where do we put this?  We already have a manage.py with a cli, so we could put it in that file, we just have to make sure we get the import folders correct.  We could also add a function to automatically make the shell context within manage.py by changing our entrypoint.sh to say:
+
+```
+if [ "$FLASK_ENV" = "development" ]
+then
+    echo "Creating the database tables..."
+    python manage.py create_db
+    echo "Tables created"
+    echo "Making the shell context"
+    python manage.py make_shell_context
+fi
+```
+Once we save this and then enter into the Container Bash, and then flask shell, if we try to run "db" we get nothing.
+
+```
+>>> db
+
+NameError: name 'db' is not defined
+
+```
+
+Attempting to run manage.py make_shell_context also resultsin an error, "invalid syntax."
+
+There are a lot of problems getting this function implemented.  Basically, there is a circular import problem, in that:
+
+* Adding it into manage.py seems to do nothing. In fact, this file seems like it may not run at all anymore, and that our database is actually being initialized under __init__.py.
+* If we put this under "models.py," then, "app" is not defined until the app is initialized under __init__.py.
+* If we add this under __init__.py, after app initialization, we get another circular problem once we log into the flask shell, in that, "User" is not defined until after the models.py file is imported.
+
+So, to get this all working, we have to go to __init__.py below the app initialization, and enter in:
+
+```
+from .models import db, Document, User, Retention
+# python shell context processor
+@app.shell_context_processor
+def make_shell_context():
+    return {'db': db, 'User': User, 'Document': Document, 'Retention': Retention}
+
+```
+
+Note that the models including Document, User, Retention are all being imported.  Once we log into the container instances and then the flask shell, you get:
+
+```
+Instance: /usr/src/theapp/instance                                                                                                      
+>>> User                                                                                                                                
+<class 'project.models.User'>                                                                                                           
+>>> Document                                                                                                                            
+<class 'project.models.Document'>                                                                                                       
+>>> Retention                                                                                                                           
+<class 'project.models.Retention'> 
+```
+
+So with that, we should double check that everything still works on localhost - which it does.
+
+We now have the direct ability to work with objects in the database and test out commands which will result in a successful query. Replicating what we did above:
+
+```
+>>> newdocument = Document(document_name=2,document_body=2)                                                                             
+>>> newdocument                                                                                                                         
+<Document (transient 139795608497504)>                                                                                                  
+>>> descending = Document.query.order_by(Document.id.desc())                                                                            
+>>> descending                                                                                                                          
+<flask_sqlalchemy.BaseQuery object at 0x7f24b391abb0>                                                                                   
+>>> newdocument_id = descending.first()                                                                                                 
+>>> print(newdocument_id)                                                                                                               
+<Document 1>
+```
+So the trick is now to find a way to actually print out that document_id.  Interestingly, now that we are in the python shell, we can print out what the various commands are doing, and it shows the exact SQL command being performed.
+
+```
+>>> print(Document.query)
+
+SELECT documents.id AS documents_id, documents.document_name AS documents_document_name, documents.document_body AS documents_document_body, documents.created_on AS documents_created_on
+
+which is the same as:
+
+>>> print(db.session.query(Document))                                                                                                   
+SELECT documents.id AS documents_id, documents.document_name AS documents_document_name, documents.document_body AS documents_document_body, documents.created_on AS documents_created_on 
+
+```
+The SQLAlchemy documentation may not have all of the answers for what we are trying to do. Neither may there may a cookie cutter answer which sovles our problem on StackExchange if we are looking directly for SQL type commands by searching through SQLAlchemy. However, if we search for help with SQL commands, for which there is a ton of documentation, we can probably translate this into SQLAlchemy API language using the [SQLAlchemy API](https://docs.sqlalchemy.org/en/13/core/selectable.html).
+
+Furthermore, we can log into our actual Postgres db container and try out the command in SQL to ensure that's what we really want, before going back and trying it in the python terminal, and then writing the command to code.  Basically we have multiple levels of testing to percolate up what we are trying to do.
+
+So if we just want the most recent document, or highest document number created just moments ago, we can use, in SQL:
+
+```
+SELECT MAX(id) FROM documents;
+```
+
+How do we actually show this result in SQLAlchemy?  Here are some various commands and their results:
+
+```
+>>> Document.query.all()                                                           
+[<Document 1>, <Document 2>, <Document 3>]
+
+>>> Document.query.count()
+3
+
+>>> Document.query.get(1)
+<Document 1>
+
+>>> Document.query.get(Document.query.count())                                     
+<Document 3>
+
+
+>>> Document.query.filter(Document.document_name=='A') 
+
+<flask_sqlalchemy.BaseQuery object at 0x7fa2b2799340>
+
+
+>>> a = Document.query.get(1)
+<Document 1>
+
+>>> a.id
+1
+
+>>> a.document_name
+'a'
+
+>>> a.document_body
+'a'
+
+>>> x = Document.query.order_by(Document.id)
+<class 'flask_sqlalchemy.BaseQuery'> 
+
+>>> x[2]
+<Document 3>
+
+>>> document_count = Document.query.count() - 1
+2
+
+>>> last_document = x[document_count]
+<Document 3>
+
+>>> last_document = x[document_count]
+
+>>> last_document.id
+3
+
+>>> type(last_document.id)                                                                                                              
+<class 'int'>
+
+
+```
+
+So basically we can get the last document by:
+
+1. Ordering by Document.id
+2. Get a count of the Documents
+3. Find the last document by indexing by the document_count
+4. Index for the last document id
+
+We use this method because documents could hypothetically be deleted in the future, meaning that we can't just get a route count of documents and index for that raw ID, because the IDs may not be equal to the count in the future.
+
+Documentation:
+
+[Document.query.all()](https://docs.sqlalchemy.org/en/13/orm/query.html#sqlalchemy.orm.query.Query.all)
+[Document.query.count()](https://docs.sqlalchemy.org/en/13/orm/query.html#sqlalchemy.orm.query.Query.count)
+[Document.query.filter()](https://docs.sqlalchemy.org/en/13/orm/query.html#sqlalchemy.orm.query.Query.filter)
+[Document.query.filter_by()](https://docs.sqlalchemy.org/en/13/orm/query.html#sqlalchemy.orm.query.Query.filter_by)
+[Document.query.first()](https://docs.sqlalchemy.org/en/13/orm/query.html#sqlalchemy.orm.query.Query.first)
+[Document.query.get()](https://docs.sqlalchemy.org/en/13/orm/query.html#sqlalchemy.orm.query.Query.get)
 
 ### Adding Flash Messages
 
@@ -3607,6 +3921,7 @@ We have all of the above built now, so it's time to introduce documents.
 * [SQL Statements and Expressions](https://docs.sqlalchemy.org/en/13/core/expression_api.html)
 * Dynamically creating pages on routes. So for example, once we are in the sponsor dashboard, rather than calling it, /sponsordashboard we call it /sponsor/dashboard. Going further, once we create new items, such as document1, we have that hosted at /sponsor/documents/document1, for example, with some kind of dynamic naming system such as /sponsor/documents/<doc1>.  However if the optimal system would be using a static page with a loader, do that instead.
 * Adding flash messages to form.
+* Fix manage.py so we can operate the app and various commands from the CLI.
 
 ## References
 
