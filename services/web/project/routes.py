@@ -102,30 +102,42 @@ def newdocument_sponsor():
     return render_template('newdocument_sponsor.jinja2',form=form)
 
 
-@sponsor_bp.route('/sponsor/documentlist', methods=['GET','POST'])
+@sponsor_bp.route('/sponsor/documents', methods=['GET','POST'])
 @login_required
 def documentlist_sponsor():
     """Logged-in Sponsor List of Documents."""
     # get the current user id
     user_id = current_user.id
-    # get document id's filtered by the current user
-    current_user_document_ids = Retention.query.filter_by(sponsor_id=user_id)
-    # get a count of the filtered documents for that particular user
-    document_count = current_user_document_ids.count()
-    # blank list to put in for loop
-    document_id_list=[]
-    # loop through documents
-    for counter in range(0,document_count):
-        # create document_id_array by appending all user-document-id's
-        document_id_list.append(current_user_document_ids[counter].document_id)
 
-    # show list of document id's
-    documents = document_id_list
+    # get document objects filtered by the current user
+    document_objects = db.session.query(Document).join(Retention, Retention.document_id == Document.id).filter(Retention.sponsor_id == user_id)
+    # get a count of the document objects
+    document_count = document_objects.count()
+    # blank list to append to
+    document_list=[]
+    # loop through document objects
+    for counter in range(0,document_count):
+        document_list.append(document_objects[counter])
+
+    # show list of document names
+    documents = document_list
 
     return render_template(
         'documentlist_sponsor.jinja2',
         documents=documents
     )
+
+
+@sponsor_bp.route('/sponsor/documents/<document_number>', methods=['GET','POST'])
+@login_required
+def documentedit_sponsor():
+
+    return render_template(
+        'documentedit_sponsor.jinja2',
+        documents=documents
+    )
+
+
 
 # ---------- editor user routes ----------
 
