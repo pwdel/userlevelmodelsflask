@@ -4139,24 +4139,218 @@ Which pulls up a table that looks like the following:
 ```
 So as we can see here, it's a sort of mega-table lining up everything by the document_id.
 
+A potential problem arises, in that, the table above has two columns named, "id"
+
 How do we create this same type of query within SQLAlchemy?  The documentation for [query.join is here](https://docs.sqlalchemy.org/en/14/orm/query.html#sqlalchemy.orm.Query.join).
 
 To join Document and Retention tables, you can use the pythonic command:
 
 ```
-db.session.query(Document).join(Retention)
+document_retentions = db.session.query(Document).join(Retention)
 ```
-This results in a new object.
+This results in a new object, but we can't seem to query "sponsor_id" and "document_id" - this is likely because it lacks the ON clause.
 
+```
+document_retentions = db.session.query(Document).join(Retention, Document.id==Retention.sponsor_id)
+```
+The above seems to have the same behavior, showing <Document 1> upon accessing with document_retentions[0], and having that object accessible by id, name and body but nothing mixed with Retentions. If we are a bit more scrupulous about how we create our join clause, specifying that we are setting the Retention.document_id equal to the Document.id, we do:
 
+```
+q = db.session.query(Document.id).join(Retention, Retention.document_id == Document.id)
+```
+Which now creates an object at q, which can only be accessed by id.
 
-### Editing, Saving, Deleting Documents
+So to review, 
 
+* The first query(A) specifies what the end object is going to include.
+* If we query(A.attribute), that end object will only include that one attribute.
 
+However, if we actually pull precisely what we are looking for, and filter for the document in question, in one pull, we get an object that includes precisely the information we want, and we can create a count on that information:
+
+```
+q = db.session.query(Document).join(Retention, Retention.document_id == Document.id).filter(Retention.sponsor_id == 1)
+
+>>> q[0].document_name
+'Document Name 1'
+
+>>> q[1].document_body
+'This is the second document.'
+
+>>> q[2].document_name
+'Document Name 5'
+
+>>> q[1].document_name
+'Document Name 2'
+
+>>> q.count()
+3
+```
+So basically, we can convert this into a list, per user, in the same way we did above, but without using a for loop, and while only using one query into the database, rather than two.
+
+```
+    # get the current user id
+    user_id = current_user.id
+
+    # get document objects filtered by the current user
+    document_objects = db.session.query(Document).join(Retention, Retention.document_id == Document.id).filter(Retention.sponsor_id == user_id)
+    # get a count of the document objects
+    document_count = document_objects.count()
+    # blank list to append to
+    documentname_list=[]
+    # loop through document objects
+    for counter in range(0,document_count):
+        documentname_list.append(document_objects[counter].document_name)
+
+    # show list of document names
+    documents = documentname_list
+
+```
+The above code worked immediately without having to debug. Excellent!
+
+#### Populating Items into a Grid
+
+Now that I have successfully been able to populate items in general, as a list, into Jinja2, after creating them, on a user by user basis, it will be helpful to be able to populate these items into more of a readable grid-like structure.
+
+So the first thing to do is figure out what exact type of grid we want, which gets designed on an HTML level, and then figure out how to generate this within Jinja2.
+
+To quickly design a table, there are tons of different online table generators, such as [this one](https://www.tablesgenerator.com/html_tables#).
+
+We can generate a table as we would like, and then insert our Jinja2 expressions and statements into the table, eliminating the rows in exchange for Jinja logic.
+
+So for example, the styled table below:
+
+```
+<style type="text/css">
+.tg  {border-collapse:collapse;border-spacing:0;}
+.tg td{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
+  overflow:hidden;padding:10px 5px;word-break:normal;}
+.tg th{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
+  font-weight:normal;overflow:hidden;padding:10px 5px;word-break:normal;}
+.tg .tg-73oq{border-color:#000000;text-align:left;vertical-align:top}
+</style>
+<table class="tg" style="undefined;table-layout: fixed; width: 580px">
+<colgroup>
+<col style="width: 243px">
+<col style="width: 337px">
+</colgroup>
+<thead>
+  <tr>
+    <th class="tg-73oq">Document Name</th>
+    <th class="tg-73oq">Document Body<br></th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td class="tg-73oq">Doc1</td>
+    <td class="tg-73oq">Doc1 Text<br></td>
+  </tr>
+  <tr>
+    <td class="tg-73oq">Doc2</td>
+    <td class="tg-73oq">Doc2 Text<br></td>
+  </tr>
+</tbody>
+</table>
+```
+We can turn into:
+
+```
+    <style type="text/css">
+    .tg  {border-collapse:collapse;border-spacing:0;}
+    .tg td{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
+      overflow:hidden;padding:10px 5px;word-break:normal;}
+    .tg th{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
+      font-weight:normal;overflow:hidden;padding:10px 5px;word-break:normal;}
+    .tg .tg-ea8y{background-color:#ffc5c5;border-color:#000000;font-weight:bold;text-align:left;vertical-align:top}
+    .tg .tg-73oq{border-color:#000000;text-align:left;vertical-align:top}
+    </style>
+
+    <table class="tg" style="undefined;table-layout: fixed; width: 580px">
+    <colgroup>
+    <col style="width: 243px">
+    <col style="width: 337px">
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="tg-73oq">Document Name</th>
+        <th class="tg-73oq">Document Body<br></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for document in documents %}
+      <tr>
+        <td class="tg-73oq">{{ document }}</td>
+        <td class="tg-73oq"> Placeholder <br></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    </table>
+```
+
+Of course it would be more efficient to store the CSS properly and call the style dynamically, but just to do a quick trial above, this works.
+
+Notice that for the document name, we have a list, "document" which includes the document names.  Reading through the Jinja2 documentation, it seems that certain variables like this may be callable by their attribute within Jinja. So, we can try passing our document as an object and accessing attributes as shown below:
+
+```
+    {% for document in documents %}
+      <tr>
+        <td class="tg-73oq">{{ document.document_name }}</td>
+        <td class="tg-73oq">{{ document.document_body }}</td>
+      </tr>
+    {% endfor %}
+
+```
+
+This of course requires changing our route logic as well, but can be done.  The change to the route logic is as follows:
+
+```
+    # blank list to append to
+    document_list=[]
+    # loop through document objects
+    for counter in range(0,document_count):
+        document_list.append(document_objects[counter])
+
+    # show list of document names
+    documents = document_list
+```
+This above logic works immediately.
+
+### Editing/Saving, Deleting Documents
+
+The first critical function, now that we have documents, would be the ability to go in and actually change what the document says, and what its title is - basically making the database completely mutable.
+
+This requires several layers of tasks to make happen:
+
+1. Creating a special, "Edit" view which pulls up a form that allows the user to enter in what would be a, "New" version of the old document, to over-write the old document text by inputting into a form.
+
+2. Creating a dynamic link to each individual Document Edit page, to allow the User/Sponsor to dynamically be able to click a link to every individual Document that they own for editing purposes.
+
+3. SQLAlchemy logic that allows individual pieces of data within the database to be overwritten, basically access and then write logic.
+
+#### Creating the Route Function with Dynamic Link
+
+Starting off, we have our capability to look at documents which we have set up at the route for "/sponsor/documents" - so it is therefore logical that we pull up additional documents by using the dynamic route "/sponsor/document/<docnumber>" with the docnumber mapping to the id for that particular document.
+
+We start off by creating a route with the variable in the URL, as follows:
+
+```
+@sponsor_bp.route('/sponsor/documents/<document_number>', methods=['GET','POST'])
+@login_required
+def documentedit_sponsor():
+
+    return render_template(
+        'documentedit_sponsor.jinja2',
+        documents=documents
+    )
+```
+So where do we get the document_number from?  We know from earlier in this investigation that we can get document_id's from the document object using db.session.query().  
 
 
 ### Creating a Dropdown for Adding Editors to Documents
 
+
+### Finishing Up Editor Views
+
+#### Limited Body Text Views - Sponsor First
 
 
 ### Adding Flash Messages
@@ -4191,7 +4385,8 @@ We have all of the above built now, so it's time to introduce documents.
 * [SQL Statements and Expressions](https://docs.sqlalchemy.org/en/13/core/expression_api.html)
 * Dynamically creating pages on routes. So for example, once we are in the sponsor dashboard, rather than calling it, /sponsordashboard we call it /sponsor/dashboard. Going further, once we create new items, such as document1, we have that hosted at /sponsor/documents/document1, for example, with some kind of dynamic naming system such as /sponsor/documents/<doc1>.  However if the optimal system would be using a static page with a loader, do that instead.
 * Adding flash messages to form.
-* Fix manage.py so we can operate the app and various commands from the CLI.
+* Fix manage.py so we can operate the app and various other commands from the CLI.
+* [Go through the Jinja Documentation](https://jinja.palletsprojects.com/en/2.11.x/templates/) to gain a fuller understanding of how to design the front-end.
 
 ## References
 
