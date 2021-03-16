@@ -3988,13 +3988,14 @@ Using that array, we can go back and query the actual document names, id's, or w
 
 ```
 current_user_document_ids = Retention.query.filter_by(sponsor_id=1)
+
 document_count = Retention.query.count()
 
-document_id_array=[]
+document_id_list=[]
 
 for counter in range(0,document_count):
     # create document_id_array by appending all user-document-id's
-    document_id_array.append(current_user_document_ids[counter].document_id)
+    document_id_list.append(current_user_document_ids[counter].document_id)
 
 ```
 So from the above, "document_id_array" is now an array with the document id's tied to the user in question, which we extracted from the Retention table, in order.  We can now access and print these names with:
@@ -4013,15 +4014,141 @@ Before we build an array or list out of this, it would be helpful to understand 
 
 [The documentation for jinja2 is here](https://jinja.palletsprojects.com/en/2.11.x/).
 
-A basic for loop in Jinja looks like this:
+Basically, the first step is to render the template from our routes:
 
 ```
-<ul>
-{% for user in users %}
-  <li><a href="{{ user.url }}">{{ user.username }}</a></li>
-{% endfor %}
-</ul>
+@sponsor_bp.route('/sponsor/documentlist', methods=['GET','POST'])
+@login_required
+def documentlist_sponsor():
+    """Logged-in User Dashboard."""
+
+    documents = [1,2,3]
+
+    return render_template(
+        'documentlist_sponsor.jinja2',
+        documentlist=documentlist
+    )
+
 ```
+
+We have now fed the variable, "documentlist" to the jinja template, as a list.
+
+```
+  <div>
+  {% for document in documents %}
+    <option>{{ document }}</option>
+  {% endfor %}
+  </div>  
+```
+
+This prints out a super simple list of our documents.
+
+Quick review of arrays vs. lists in python:
+
+Lists: 1. Contain different data types. 2. Don't need to explicitly envoke a module. 3. Can't handle arithmetic. 4. Can be listed. 5. Better for shorter sequences.
+
+Arrays: 1. Same datatype. 2. Need to envoke array.array() . 3. Can handle arithmetic. 4. All elements may be the same size.
+
+Beyond normal python arrays, incidentally, numpy arrays are faster and use less memory.
+
+### Putting Documents by User in a List
+
+#### Side Note on Flask Shell
+
+One brief problem I ran into while attempting to log back into the flask shell is that there are two distinct commands for logging into a docker container that I have come across:
+
+```
+sudo docker run --rm -it app_name bash
+
+sudo docker exec -it flask /bin/bash
+```
+The first one runs a new container, which we don't want to do, because it overwrites and can't connect to the database. The second one just connects to an existing container. Exec = execute, go in and execute on the command. "Run" = run the whole system.
+
+#### Adding Document Filtering Listing to Route
+
+Below is the final working code which displays all of the documents to our route function.
+
+```
+def documentlist_sponsor():
+    """Logged-in Sponsor List of Documents."""
+    # get the current user id
+    user_id = current_user.id
+    # get document id's filtered by the current user
+    current_user_document_ids = Retention.query.filter_by(sponsor_id=user_id)
+    # get a count of the filtered documents for that particular user
+    document_count = current_user_document_ids.count()
+    # blank list to put in for loop
+    document_id_list=[]
+    # loop through documents
+    for counter in range(0,document_count):
+        # create document_id_array by appending all user-document-id's
+        document_id_list.append(current_user_document_ids[counter].document_id)
+
+    # show list of document id's
+    documents = document_id_list
+
+    return render_template(
+        'documentlist_sponsor.jinja2',
+        documents=documents
+    )
+
+```
+
+Something we may want to think about, is whether this function could be used on more than just sponsors, and whether we can re-use the code. If this is the case, then we might want to call the function, "documentlist_user()" or something more general.
+
+Since we are rendering the template and passing the variable, "documents" this can then get picked up by the .jinja2 file, and the list of document id's gets neatly printed out.
+
+But what if we wanted to display the document names instead of the ID's?  IT should be a matter of changing the appended indexer, so that rather than using .id, we use .document_name.
+
+In other words:
+
+```
+    document_name_list=[]
+    # loop through documents
+    for counter in range(0,document_count):
+        # create document_id_array by appending all user-document-id's
+        document_name_list.append(current_user_document_ids[counter].document_name)
+
+    # show list of document id's
+    documents = document_name_list
+
+```
+Of course, when I attempt to implement the above, we get an error because the "Retentions" class does not have an attribute .document_name.  Basically we have to filter based upon the indicies in Retentions. The, "join" method is the way to do filtering using two tables, rather than multiple for loops.  According to this [StackOverflow discussion on doing a MySQL Query vs. a For Loop]():
+
+> The join method is generally considered better, if only because it reduces the overhead of sending queries back and forth to the database.
+
+Database memory is scarce, as databases are typically smaller processing units, with an extremely thin linux client, such as alpine linux, running one specific program, to manage a database. This contrasts to the architecture of a server, which has more memory as well as a larger processor.  In addition, the join method consolidates the data logic in one place, making the code more transparent.
+
+##### Playing around with Creating a Join SQL Query
+
+So we can create a joined table by running the following SQL command:
+
+```
+# SELECT * FROM documents JOIN retentions ON documents.id = retentions.sponsor_id; 
+```
+Which pulls up a table that looks like the following:
+
+```
+ id |  document_name  |        document_body         | created_on | id | sponsor_id | document_id                                       
+----+-----------------+------------------------------+------------+----+------------+-------------                                      
+  1 | Document Name 1 | This is the first document.  |            |  1 |          1 |           1                                       
+  1 | Document Name 1 | This is the first document.  |            |  2 |          1 |           2                                       
+  2 | Document Name 2 | This is the second document. |            |  3 |          2 |           3                                       
+  2 | Document Name 2 | This is the second document. |            |  4 |          2 |           4                                       
+  1 | Document Name 1 | This is the first document.  |            |  5 |          1 |           5                                       
+```
+So as we can see here, it's a sort of mega-table lining up everything by the document_id.
+
+How do we create this same type of query within SQLAlchemy?  The documentation for [query.join is here](https://docs.sqlalchemy.org/en/14/orm/query.html#sqlalchemy.orm.Query.join).
+
+To join Document and Retention tables, you can use the pythonic command:
+
+```
+db.session.query(Document).join(Retention)
+```
+This results in a new object.
+
+
 
 ### Editing, Saving, Deleting Documents
 
