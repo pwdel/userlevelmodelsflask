@@ -16,7 +16,9 @@
 
   <div>
 
-    <p>Create a new document below.</p>
+    <p><h4>Create a New Document Below</h4></p>
+
+    <hr>
 
     <div class="form-wrapper">
 
@@ -34,26 +36,32 @@
           {% endif %}
         </fieldset>
 
-        <fieldset class="document_body">
-          {{ form.document_body.label }}
-          {{ form.document_body(placeholder='Document Body Content') }}
-          {% if form.document_body.errors %}
-            <ul class="errors">
-              {% for error in form.document_body.errors %}
-                <li>{{ error }}</li>{% endfor %}
-            </ul>
-          {% endif %}
-        </fieldset>
+      <p></p>
 
-        <div class="submit-button">
-          {{ form.submit }}
-        </div>
+
+      <fieldset class="document_body">
+        {{ form.document_body.label }}
+        {{ form.document_body(placeholder='Document Body Content', size=100) }}
+        {% if form.document_body.errors %}
+          <ul class="errors">
+            {% for error in form.document_body.errors %}
+              <li>{{ error }}</li>{% endfor %}
+          </ul>
+        {% endif %}
+      </fieldset>
+
+
+      <p></p>
+
+      <div class="submit-button">
+         {{ form.submit }}
+      </div>
 
       </form>
 
   </div>
 
-  </div>
+  <div>
     <a href="{{ url_for('sponsor_bp.dashboard_sponsor') }}">Back to Sponsor Dashboard</a>
   </div>
 

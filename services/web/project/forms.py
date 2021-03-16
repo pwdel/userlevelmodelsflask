@@ -1,6 +1,6 @@
 """Sign-up & log-in forms."""
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField
+from wtforms import StringField, PasswordField, SubmitField, SelectField
 import email_validator
 from wtforms.validators import (
     DataRequired,
@@ -71,3 +71,12 @@ class NewDocumentForm(FlaskForm):
         validators=[Optional()]
     )
     submit = SubmitField('Submit')
+
+
+class PastebinEntry(FlaskForm):
+    language = SelectField(
+        u'Programming Language', 
+        choices=[('cpp', 'C++'), 
+        ('py', 'Python'), 
+        ('text', 'Plain Text')]
+        )

@@ -2,7 +2,7 @@
 from flask import Blueprint, redirect, render_template, flash, request, session, url_for
 from flask_login import current_user, login_required
 from flask_login import logout_user
-from .forms import NewDocumentForm
+from .forms import NewDocumentForm, PastebinEntry
 from .models import db, Document, User, Retention
 
 # Blueprint Configuration
@@ -97,7 +97,7 @@ def newdocument_sponsor():
          # message included in the route python function
         message = "New Document saved. Create another document if you would like."
         # if everything goes well, they will be redirected to newdocument
-        return render_template('dashboard_sponsor.jinja2', form=form)
+        return render_template('dashboard_sponsor.jinja2',form=form)
 
     return render_template('newdocument_sponsor.jinja2',form=form)
 
@@ -108,7 +108,6 @@ def documentlist_sponsor():
     """Logged-in Sponsor List of Documents."""
     # get the current user id
     user_id = current_user.id
-
     # get document objects filtered by the current user
     document_objects = db.session.query(Document).join(Retention, Retention.document_id == Document.id).filter(Retention.sponsor_id == user_id)
     # get a count of the document objects
@@ -128,14 +127,40 @@ def documentlist_sponsor():
     )
 
 
-@sponsor_bp.route('/sponsor/documents/<document_number>', methods=['GET','POST'])
+@sponsor_bp.route('/sponsor/documents/<document_id>', methods=['GET','POST'])
 @login_required
-def documentedit_sponsor():
+def documentedit_sponsor(document_id):
+
+    # query for the document_id in question to get the object
+    document = db.session.query(Document).filter_by(id = document_id)[0]
+
+    # new document form
+    form = NewDocumentForm()
+
+    if form.validate_on_submit():
+        # take new document
+        # edit document parameters
+        # index [0], which is the row in question for document name
+        document.document_name = form.document_name.data
+        document.document_body = form.document_body.data
+        
+        # commit changes
+        db.session.commit()
+
+    # editor selector
+    selector = PastebinEntry()
+
+        # test out selector form
+    if selector.validate_on_submit():
+        lang = selector.language.data
+
 
     return render_template(
         'documentedit_sponsor.jinja2',
-        documents=documents
-    )
+        form=form,
+        selector=selector,
+        document=document
+        )
 
 
 

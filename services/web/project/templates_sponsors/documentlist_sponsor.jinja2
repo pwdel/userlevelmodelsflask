@@ -40,7 +40,9 @@
     <tbody>
     {% for document in documents %}
       <tr>
-        <td class="tg-73oq">{{ document.document_name }}</td>
+        <td class="tg-73oq">
+          <a href="{{ url_for('sponsor_bp.documentedit_sponsor', document_id=document.id) }}">{{ document.document_name }}</a>
+        </td>
         <td class="tg-73oq">{{ document.document_body }}</td>
       </tr>
     {% endfor %}

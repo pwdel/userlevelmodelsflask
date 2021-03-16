@@ -1,0 +1,82 @@
+{% extends "layout.jinja2" %}
+
+{% block content %}
+  <div class="form-wrapper">
+
+    <div class="logo">
+      <img
+        src="{{ url_for('static', filename='img/linguo.jpg') }}"
+        alt="logo"
+      />
+    </div>
+
+    <h1>Edit Document</h1>
+
+  <div>
+
+    <p><h4>Edit Your Document Below</h4></p>
+
+    <hr>
+
+    <p>Current Document Title: <b>{{ document.document_name }}</b></p>
+
+    <p>Current Document Content: <b>{{ document.document_body }}</b></p>
+    
+    <hr>
+
+    <div class="form-wrapper">
+
+      <form method="POST" action="">
+        {{ form.csrf_token }}
+        {{ form.name }}
+        <fieldset class="document_name">
+          {{ form.document_name.label }}
+          {{ form.document_name(placeholder='Document Name')}}
+          {% if form.document_name.errors %}
+            <ul class="errors">
+              {% for error in form.document_name.errors %}
+                <li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+        </fieldset>
+
+      <p></p>
+
+
+      <fieldset class="document_body">
+        {{ form.document_body.label }}
+        {{ form.document_body(placeholder='Document Body Content', size=100) }}
+        {% if form.document_body.errors %}
+          <ul class="errors">
+            {% for error in form.document_body.errors %}
+              <li>{{ error }}</li>{% endfor %}
+          </ul>
+        {% endif %}
+      </fieldset>
+
+
+      <p></p>
+
+      <div class="submit-button">
+         {{ form.submit }}
+      </div>
+
+      </form>
+
+      <form>
+          {{ selector.language.label }}{{selector.language}}
+      </form>
+
+
+
+  </div>
+
+  <p></p>
+
+  <div>
+    <a href="{{ url_for('sponsor_bp.documentlist_sponsor') }}">List of Documents</a>
+  </div>
+
+  <p></p>
+
+{% endblock %}

@@ -4333,19 +4333,215 @@ Starting off, we have our capability to look at documents which we have set up a
 We start off by creating a route with the variable in the URL, as follows:
 
 ```
-@sponsor_bp.route('/sponsor/documents/<document_number>', methods=['GET','POST'])
+@sponsor_bp.route('/sponsor/documents/<document_id>', methods=['GET','POST'])
 @login_required
-def documentedit_sponsor():
+def documentedit_sponsor(document_id):
 
     return render_template(
-        'documentedit_sponsor.jinja2',
-        documents=documents
+        'documentedit_sponsor.jinja2'
     )
 ```
-So where do we get the document_number from?  We know from earlier in this investigation that we can get document_id's from the document object using db.session.query().  
+So where do we get the document_number from?  We know from earlier in this investigation that we can get document_id's from the document object using db.session.query().  The code for that would be:
 
+```
+    # get the current user id
+    user_id = current_user.id
+    # get document objects filtered by the current user
+    document_objects = db.session.query(Document).join(Retention, Retention.document_id == Document.id).filter(Retention.sponsor_id == user_id)
+    # get a count of the document objects
+    document_count = document_objects.count()
+    # blank list to append to
+    document_list=[]
+    # loop through document objects
+    for counter in range(0,document_count):
+        document_list.append(document_objects[counter])
+
+    # show list of document names
+    documents = document_list
+
+```
+
+The variable, "documents" includes a list of objects which have attributes from the documents table, filtered by user.  From these objects we can get the unique document_id within our jinja2 template with:
+
+```
+document.id
+```
+So hypothetically, we can feed back from within Jinja to a dynamically created route, using url_for() with a jinja variable.  This should be doable with the url_for function, in the format: "{{ url_for('function_name', variable=variable) }}"
+
+```
+{{ url_for('sponsor_bp.documentedit_sponsor', document_id=document.id) }}
+```
+So the above line, placed within our template:
+
+* Should create a link using the function documentedit_sponsor().
+* the variable passed into the function should be dynamically created per the function's specifications, and be equal to document.id.
+
+We can further turn the, "Document Name" into a link itself by using standard HTML href.
+
+```
+        <td class="tg-73oq">
+          <a href="{{ url_for('sponsor_bp.documentedit_sponsor', document_id=document.id) }}">{{ document.document_name }}</a>
+        </td>
+```
+The above works to create links, and creates dynamic links flawlessly.  There was one small problem with the newly rendered template, which was that we attempted to pass a variable, "document" in the render_template function which had no definition, but once we took that variable out, it worked.
+
+#### Creating Editing Forms
+
+The next step, now that we have the precision capability to enter into document pages, is to be able to go in and actually edit the documents.  This suggests pre-filled forms, which basically populate with document text, and give the user to, "save" again, essentially re-writing the old database entry with a new entry.
+
+Presumably to create an editing form, we should be able to pre-fill with a specified variable.  However before we go any further, let's figure out if we can tweak our current form, the, "create new document" form in order to make the body text box larger.
+
+##### Grow Size of Body Text Box
+
+So basically, we're using Bootstrap, which should have a bunch of standard CSS styles included in it.  This comes from the, "layout" jinja template, which currently encompasses all of our pages.
+
+```
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+```
+The [bootstrap documentation can be found here](https://getbootstrap.com/docs/5.0/getting-started/introduction/) - keep in mind, the version we are using may differ slightly from the documentation.  Looking at the documentation for [forms](https://getbootstrap.com/docs/5.0/forms/input-group/), we can see that there is a class, "input-group" which seems to be for larger text.
+
+```
+<div class="input-group">
+  <span class="input-group-text">With textarea</span>
+  <textarea class="form-control" aria-label="With textarea"></textarea>
+</div>
+```
+
+Further, there is a way to change the actual text area, as follows:
+
+```
+<div class="mb-3">
+  <label for="exampleFormControlTextarea1" class="form-label">
+  Example textarea
+  </label>
+  <textarea class="form-control" id="exampleFormControlTextarea1" rows="3">
+  </textarea>
+</div>
+```
+Combining the two together, we get:
+
+```
+<div class="input-group">
+    <span class="input-group-text">With textarea</span>
+    <textarea class="form-control" id="exampleFormControlTextarea1" rows="3">
+    </textarea>
+    <textarea class="form-control" aria-label="With textarea"></textarea>
+</div>
+```
+Unfortunately, none of this works and it just creates a jumble of user interface that doesn't work right.  So, after some quick reading, it turns out that there is a way to work with bootstrap [using a module called, "flask-boostrap," per this tutorial here](https://john.soban.ski/pass-bootstrap-html-attributes-to-flask-wtforms.html).
+
+So, we reverted everything back and we're going to have to life with the forms we have for now.
+
+##### Pre-Populating WTF Forms
+
+So one of the first questions is whether we can actually use the same form, the, "NewDocumentForm" and perhaps rename it, "DocumentForm" and just recycle the same old form, while pre-populating it with strings from our existing database.  This would of course make things the easiest, as we don't have to create an additional form.
+
+We can start off to ensure that we can enter our document into the form itself with:
+
+```
+On the route:
+
+# query for the document_id in question to get the object
+document = db.session.query(Document).filter_by(id = document_id)[0]
+
+
+On the documentedit_sponsor.jinja2 template:
+
+<p>Current Document Title: <b>{{ document.document_name }}</b></p>
+```
+...of course not forgetting to pass the variable, "document" under the render_template function within the route.
+
+So now how do we unobstrusively add the Name and the Document Body Content, pre-populated into the form?
+
+Basically, it sounds like we need to pass variables via jinja to html via "input" and "textarea" elements, indexing to the object that has been passed.
+
+```
+<input type="text" class="form-control" documentname=document.document_name value="{{ name[0]["name"] }}">
+```
+This does not work, so we revert over to the [WTF-flask documentation](https://wtforms.readthedocs.io/en/2.3.x/forms/#using-forms), which says that:
+
+> if request.POST and form.validate():
+>    form.populate_obj(article)
+>    article.save()
+>    return redirect('/articles')
+
+> Inside the gated block, we call populate_obj() to copy the data onto fields on the ‘article’ object. We also then redirect after a successful completion. The reason we redirect after the post is a best-practice associated with the Post/Redirect/Get design pattern.
+
+So it seems that the function populate_obj needs to be used.  Whereas above I'm attempting to populate the form in the Jinja/front end template, it appears that the domain of the form may actually controlled by wtf, so it needs to be on the function/server and backend side, which then gets populated up into Jinja as a part of the form.
+
+This also seems to entail creating a different form, "EditForm" rather than, "NewForm."  However there is documentation on how we can inheret from different forms.
+
+[This Stackoverflow Article](https://stackoverflow.com/questions/42984453/wtforms-populate-form-with-data-if-data-exists) appears to go into greater detail.
+
+##### Writing to Database
+
+After the form is filled out on the frontend, we have to populate it to the back-end, which is done on the function.
+
+The difference is, we are oing to be adding or re-writing over a specific datapoint.  We are not creating an entirely new object, we are not subscripting the object we have, because it's already subscripted, we're just indexing it and commiting changes.
+
+```
+    if form.validate_on_submit():
+        # take new document
+        # edit document parameters
+        # index [0], which is the row in question for document name
+        document.document_name = form.document_name.data
+        document.document_body = form.document_body.data
+        
+        # commit changes
+        db.session.commit()
+```
+
+There is no need to change the retentions table at this point.  The document remains owned by the same user.
 
 ### Creating a Dropdown for Adding Editors to Documents
+
+To create a dropdown, we use wtf-flask and something called, "SelectField."
+
+There is a list of [BasicFields](https://wtforms.readthedocs.io/en/2.3.x/fields/#basic-fields) which include everything from Boolean, Date, Time, Decimal, File Upload, Multiple File Upload, Float, Integer, Radio Button, Select, SelectMultiple and of course Submit.
+
+SelectMultiple is like a checbox rather than a dropdown.
+
+> Select fields take a choices parameter which is a list of (value, label) pairs. It can also be a list of only values, in which case the value is used as the label. The value can be any type, but because form data is sent to the browser as strings, you will need to provide a coerce function that converts a string back to the expected type.
+
+An example can be foudn below:
+
+```
+class PastebinEntry(Form):
+    language = SelectField(u'Programming Language', choices=[('cpp', 'C++'), ('py', 'Python'), ('text', 'Plain Text')])
+```
+
+We can start out by putting this on our documentedit_sponsor.jinja2 template and route.  We're just testing this out with static choices to make sure we can make it work first.
+
+Jinja2:
+
+```
+      <form>
+          {{ selector.language.label }}{{selector.language}}
+      </form>
+```
+Route:
+```
+from .forms import NewDocumentForm, PastebinEntry
+
+    # editor selector
+    selector = PastebinEntry()
+
+        # test out selector form
+    if selector.validate_on_submit():
+        lang = selector.language.data
+
+```
+Forms:
+```
+class PastebinEntry(FlaskForm):
+    language = SelectField(
+        u'Programming Language', 
+        choices=[('cpp', 'C++'), 
+        ('py', 'Python'), 
+        ('text', 'Plain Text')]
+        )
+```
+#### Dynamic Entries for Dropdown Form
 
 
 ### Finishing Up Editor Views
@@ -4387,6 +4583,7 @@ We have all of the above built now, so it's time to introduce documents.
 * Adding flash messages to form.
 * Fix manage.py so we can operate the app and various other commands from the CLI.
 * [Go through the Jinja Documentation](https://jinja.palletsprojects.com/en/2.11.x/templates/) to gain a fuller understanding of how to design the front-end.
+* [using a module called, "flask-boostrap," per this tutorial here](https://john.soban.ski/pass-bootstrap-html-attributes-to-flask-wtforms.html) to implement bootstrap designs.
 
 ## References
 
