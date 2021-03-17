@@ -4,6 +4,7 @@ from flask_login import current_user, login_required
 from flask_login import logout_user
 from .forms import DocumentForm
 from .models import db, Document, User, Retention
+from wtforms_sqlalchemy.orm import QuerySelectField
 
 # Blueprint Configuration
 # we define __name__ as the main blueprint, and the templates/static folder.
@@ -55,33 +56,17 @@ def dashboard_sponsor():
 
 @sponsor_bp.route('/sponsor/newdocument', methods=['GET','POST'])
 @login_required
-def newdocument_sponsor(request):
+def newdocument_sponsor():
     
     # new document form
-    form = DocumentForm(request.POST,obj=editorchoice)
-
-    def create_editorlist():
-        # create list of editors
-        # pull table of editors object from database
-        editors = db.session.query(User).filter_by(user_type = 'editor')
-        # start a blank list into which we will put tuples (id,Name)
-        editorlist = [(0,'None')]
-        # use sqlalchemy count() method to count all editors
-        editorcount = editors.count()
-        # loop through editors object, populating (id, Name) into a list
-        for counter in range(0,editorcount):
-            # append tuples of (id, Name)
-            editorlist.append((editors[counter].id,editors[counter].name))
-    return editorlist
-
-    editorlist = create_editorlist()
+    form = DocumentForm()
 
     # display choices from list of editors
-    form.editorlist.choices = editorlist
-
-
+    form.editorchoice.query = User.query.filter(User.user_type == 'editor')
 
     if form.validate_on_submit():
+
+        # Add New Document ------------
         # take new document
         # create new document
         newdocument = Document(
@@ -103,11 +88,18 @@ def newdocument_sponsor(request):
         # new document id for retentions database is indexed last documentid integer
         newdocument_id = last_document.id
 
+
+        # Add Sponsor Retention ------------
         # get the current userid
         user_id = current_user.id
+
+        # extract the selected editor choice from the form
+        # editor_id=form.editorchoice.data.id
+
         # create a new retention entry
         newretention = Retention(
             sponsor_id=user_id,
+
             document_id=newdocument_id
             )
         

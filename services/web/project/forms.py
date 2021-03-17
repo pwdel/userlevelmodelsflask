@@ -9,6 +9,7 @@ from wtforms.validators import (
     Length,
     Optional
 )
+from wtforms_sqlalchemy.orm import QuerySelectField
 
 
 class SignupForm(FlaskForm):
@@ -59,6 +60,9 @@ class LoginForm(FlaskForm):
     submit = SubmitField('Log In')
 
 
+# define user_query in order for QuerySelectField query_factory to work
+def user_query():
+    return User.query
 
 class DocumentForm(FlaskForm):
     """Create New Document Form."""
@@ -70,8 +74,9 @@ class DocumentForm(FlaskForm):
         'Document Body',
         validators=[Optional()]
     )
-    editorchoice = SelectField(
-        u'Editor',
-        coerce=int
+    editorchoice = QuerySelectField(
+        query_factory=user_query, 
+        allow_blank=True, 
+        get_label='name'
     )
     submit = SubmitField('Submit')

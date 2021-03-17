@@ -9,3 +9,4 @@ email-validator==1.1.2
 Flask-Assets==2.0
 cssmin==0.2.0
 jsmin==2.2.2
+WTForms-SQLAlchemy==0.2
