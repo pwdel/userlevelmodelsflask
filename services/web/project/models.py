@@ -178,12 +178,12 @@ class Retention(db.Model):
         nullable=True
     )
 
-#    editor_id = db.Column(
-#        db.Integer, 
-#        db.ForeignKey('users.id'),
-#        unique=False,
-#        nullable=True
-#    )
+    editor_id = db.Column(
+        db.Integer, 
+        db.ForeignKey('users.id'),
+        unique=False,
+        nullable=True
+    )
 
     document_id = db.Column(
         db.Integer, 

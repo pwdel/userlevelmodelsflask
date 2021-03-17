@@ -4650,6 +4650,229 @@ Now, the problem is of course, once we modify the "DocumentForm" which is our on
 
 So reflecting on this, one of the advantages of code inherentance and building based upon re-use of code, is that less code needs to be written and it's easier to read through. One of the disadvantages is that if there are, "subsequent" functions that happen sequentially in time, one after another, you can't debug the subsequent interface until the starter interface has been built already - unless you have a function that seeds the database!
 
+##### Adding Entries into newdocument_sponsor() Route
+
+The newdocument_sponsor() route starts off with:
+
+```
+def newdocument_sponsor():
+    
+    # new document form
+    form = DocumentForm()
+```
+
+Basically establishing the form, which was previously only a purely user-input form with stringfields.  However now that we are establishing a list of things for the user to pick from, we have some inputs that are needed into the form and function.
+
+```
+def newdocument_sponsor(request):
+
+form = DocumentForm(request.POST,obj=editorchoice)
+```
+
+Basically, "request" is an input which goes into the form from the function. Where does the function get the input, "request?"  This may not be the way to set everything up 100%.  Looking at these Stackoverflow discussion on 
+
+* [Flask-WTForms and SQLAlchemy SelectField](https://stackoverflow.com/questions/36180084/flask-wtforms-and-sqlaalchemy-selectfield-with-relation) 
+* [Dynamically Populate WTForm SelectField with SQLAlchemy Query](https://stackoverflow.com/questions/52635661/dynamically-populate-wtform-selectfield-with-sqlalchemy-query)
+* [How to use wtforms SelectField depending on dynamic attributes with flask/sqlalchemy](https://stackoverflow.com/questions/60628496/how-to-use-wtforms-selectfield-depending-on-dynamic-attributes-with-flask-flas)
+
+we make a few observations:
+
+1. The way lists are made appear consistent with how we make lists, except for turning the integer id into a string with str(). This string might be because the user is possibly interested in printing out the id on the view, however it may also be that a string is required as an input.
+2. The Form appears to include a "choices" variable.
+3. We may need some kind of initialization function under the DocumentForm class.  For example:
+
+```
+  def __init__(self, *args, **kwargs):
+        super(DocumentForm, self).__init__(*args, **kwargs)
+        self.newdocument_sponsor.choices = [(editors[counter].id, editors[counter].name) for counter in Editor.query.order_by(Editor.id)]
+
+```
+4.  [QuerySelectField](https://wtforms.readthedocs.io/en/2.3.x/ext/?highlight=queryselectfield#wtforms.ext.sqlalchemy.fields.QuerySelectField) seems to be something that needs to be added on the Forms.py file.  According to the wtforms documentation (version 2.3 mentions the documentation for this is depricated since version 2.0 and we should use [WTForms-SQLAlchemy](https://github.com/wtforms/wtforms-sqlalchemy).
+
+
+##### Using WTForms-SQLAlchemy to Create a Functioning Dynamic Dropdown List
+
+In this section we are using [WTForms-SQLAlchemy](https://github.com/wtforms/wtforms-sqlalchemy).
+
+> WTForms-SQLAlchemy is a fork of the wtforms.ext.sqlalchemy package from WTForms. The package has been renamed to wtforms_sqlalchemy but otherwise should function the same as wtforms.ext.sqlalchemy did.
+
+This wtforms-sqlalchemy includes:
+
+> SelectField integration with SQLAlchemy models.
+> 
+>    wtforms_sqlalchemy.fields.QuerySelectField
+>    wtforms_sqlalchemy.fields.QuerySelectMultipleField
+>
+> Generate forms from SQLAlchemy models using wtforms_sqlalchemy.orm.model_form
+
+The versioning for this is stored at PyPi [WTForms-SQLAlchemy](https://pypi.org/project/WTForms-SQLAlchemy/).  So, we could install this in our requirements.  We add this to requirements.txt as, "WTForms-SQLAlchemy==0.2"
+
+From this repo, we see an [example build file](https://github.com/wtforms/wtforms-sqlalchemy/blob/master/examples/flask/basic.py) shown on Github.
+
+1. The first step is to get the import working, which is done with the following:
+
+On forms.py...
+
+```
+from wtforms_sqlalchemy.orm import model_form, QuerySelectField
+```
+
+Now that we have imported QuerySelectField from the proper location, rather than SQLAlchemy from wtforms, since that is being depricated, we can likely use the [old documentation to set things up, based upon ORM-backed fields](https://wtforms.readthedocs.io/en/stable/ext/#module-wtforms.ext.sqlalchemy).
+
+2. Set up a proper form with QuerySelectField included.
+
+Looking at the various Stackoverflow discussions above, one suggested result was a tutorial on the [usage of QuerySelectField from PrettyPrinted](https://github.com/PrettyPrinted/youtube_video_code/tree/master/2017/09/01/Generating%20Select%20Fields%20in%20Flask-WTF%20From%20SQLAlchemy%20Queries%20(QuerySelectField)).
+
+Note that QuerySelectField() is an actual replacement for SelectField()
+
+```
+    editorchoice = QuerySelectField(
+        query_factory=choice_query, 
+        allow_blank=True, 
+        get_label='name'
+    )
+
+```
+* Note that I set, allow_blank=True to allow a default null option.
+
+
+3. We also have to set up a function for the query_factory to be able to query our object as needed.  query_factory returns a query, not the results.  
+
+```
+# define user_query in order for QuerySelectField query_factory to work
+def user_query():
+    return User.query
+```
+Per the documentation
+
+> The query property on the field can be set from within a view to assign a query per-instance to the field. If the property is not set, the query_factory callable passed to the field constructor will be called to obtain a query.
+
+
+4. We set up an SQLAlchemy class in the same way we would previously, without having to pass an argument into it, or the route function.
+
+Then, in the form object itself, we call editorchoice and do a query on that form, filtering by user type, just as we had done previously when we had set up a db.session.query(User) query and put that information into a list. Presumably, QuerySelectField is formatting the information into a list for us.
+
+Of course we need to know which fields we are going to show on the options.
+
+On routes.py
+```
+form = DocumentForm()
+
+...
+
+# display choices from list of editors
+form.editorchoice.query = User.query.filter(User.user_type == 'editor')
+
+```
+5. We pass to the template same as had done previously, because this is part of the form object.
+
+```
+return render_template('dashboard_sponsor.jinja2',form=form)
+```
+6. We pass form.editorchoice to have the results show up on the view.
+
+```
+     {{ form.editorchoice }}
+```
+
+
+User QuerySelectField(SelectFieldBase) per [this documentation](https://github.com/wtforms/wtforms-sqlalchemy/blob/e172387992601ab8477d767580e957209ac46ea1/wtforms_sqlalchemy/fields.py#L28) includes additional updates.
+
+After all of the above is implemented and working for our dropdown menu, we can then eliminate the function which used a for loop to query for our editors:
+
+```
+    def create_editorlist():
+        # create list of editors
+        # pull table of editors object from database
+        editors = db.session.query(User).filter_by(user_type = 'editor')
+        # start a blank list into which we will put tuples (id,Name)
+        editorlist = []
+        # use sqlalchemy count() method to count all editors
+        editorcount = editors.count()
+        # loop through editors object, populating (id, Name) into a list
+        for counter in range(0,editorcount):
+            # append tuples of (id, Name)
+            editorlist.append((str(editors[counter].id),editors[counter].name))
+    
+        return editorlist
+
+    # this will create a list of tuples [(id,name),(id,name)]
+    editorlist = create_editorlist()
+```
+After deleting the above, the application still works.
+
+##### Placing a Record in the Retentions Database
+
+The first thing we have to do in order to be able to assign editors to documents is to update the retentions table to allow another column for editor_id's.
+
+```
+    editor_id = db.Column(
+        db.Integer, 
+        db.ForeignKey('users.id'),
+        unique=False,
+        nullable=True
+    )
+```
+
+From here we have to rebuild the Docker container.  Double checking our database after running the Docker container, we see that editor_id is added to the database.
+
+So since editor_id has been added as an available column, how do we add a selected editor onto the retentions table?  Previously we had added a new retention as follows:
+
+```
+# Add Sponsor Retention ------------
+# get the current userid
+user_id = current_user.id
+# create a new retention entry
+newretention = Retention(
+    sponsor_id=user_id,
+    document_id=newdocument_id
+    )
+```
+Now, rather than adding simply the user_id, meaning the sponsor_id, we have to find the id of the selected editor, and add that into the retention table.
+
+The problem is, we seem to have an error with editor_id = db.Column from above.
+
+```
+sqlalchemy.exc.AmbiguousForeignKeysError
+
+sqlalchemy.exc.AmbiguousForeignKeysError: Could not determine join condition between parent/child tables on relationship User.documents - there are multiple foreign key paths linking the tables.  Specify the 'foreign_keys' argument, providing a list of those columns which should be counted as containing a foreign key reference to the parent table.
+
+```
+Basically, it looks like we can't use users.id as a foreign key in two places. What this means, unfortunately, is that we probably have to have a seperate table for Editor-Users, completely seperate and apart from Sponsor-Users. This is not the end of the world, as Editor-Users will likely never convert to become Sponsor-Users, in the model we are creating.
+
+This is of course, unless we can tell the mapper explicitly how SQLAlchemy should use.  
+
+From [this Stackoverflow article on foreign keys error](https://stackoverflow.com/questions/40110574/sqlalchemy-exc-ambiguousforeignkeyserror-after-inheritance)
+
+> When your tables have multiple possible paths to inherit between them (Sales.EmployeeID or Sales.OldEmployeeID), SqlAlchemy doesn't know which one to use and you'll need to tell it the path explicitly, by using inherit_condition. For instance to inherit by EmployeeID:
+>__mapper_args__ = { "inherit_condition": EmployeeID == Employee.EmployeeId }
+> For the sake of example, you could also inherit by OldEmployeeID, by entering OldEmployeeID == Employee.EmployeeId - this would mean that both your Sales primary key and the Employee primary key are allowed to be different.
+
+The [SQLAlchemy documentation for __mapper_args__ is here](https://docs.sqlalchemy.org/en/13/orm/extensions/declarative/inheritance.html).
+
+However, this does not have to deal with inheritance, this has to deal with multiple join paths - we have 
+
+[From the SQLAlchemy Documentation](https://docs.sqlalchemy.org/en/14/orm/join_conditions.html#handling-multiple-join-paths):
+
+> One of the most common situations to deal with is when there are more than one foreign key path between two tables.
+
+We need to figure out how to change our backreferences.
+
+```
+    """backreferences to user and document tables"""
+    user = db.relationship(
+        'User', 
+        back_populates='documents'
+        )
+
+    document = db.relationship(
+        'Document', 
+        back_populates='users'
+        )
+```
+
+
+
 
 #### Adding editor.id to Relations Table
 
