@@ -2,7 +2,7 @@
 from flask import Blueprint, redirect, render_template, flash, request, session, url_for
 from flask_login import current_user, login_required
 from flask_login import logout_user
-from .forms import NewDocumentForm, PastebinEntry
+from .forms import DocumentForm
 from .models import db, Document, User, Retention
 
 # Blueprint Configuration
@@ -55,11 +55,32 @@ def dashboard_sponsor():
 
 @sponsor_bp.route('/sponsor/newdocument', methods=['GET','POST'])
 @login_required
-def newdocument_sponsor():
+def newdocument_sponsor(request):
     
     # new document form
-    form = NewDocumentForm()
-    
+    form = DocumentForm(request.POST,obj=editorchoice)
+
+    def create_editorlist():
+        # create list of editors
+        # pull table of editors object from database
+        editors = db.session.query(User).filter_by(user_type = 'editor')
+        # start a blank list into which we will put tuples (id,Name)
+        editorlist = [(0,'None')]
+        # use sqlalchemy count() method to count all editors
+        editorcount = editors.count()
+        # loop through editors object, populating (id, Name) into a list
+        for counter in range(0,editorcount):
+            # append tuples of (id, Name)
+            editorlist.append((editors[counter].id,editors[counter].name))
+    return editorlist
+
+    editorlist = create_editorlist()
+
+    # display choices from list of editors
+    form.editorlist.choices = editorlist
+
+
+
     if form.validate_on_submit():
         # take new document
         # create new document
@@ -67,7 +88,7 @@ def newdocument_sponsor():
             document_name=form.document_name.data,
             document_body=form.document_body.data
             )
-        
+
         # add and commit new document
         db.session.add(newdocument)
         db.session.commit()
@@ -129,13 +150,25 @@ def documentlist_sponsor():
 
 @sponsor_bp.route('/sponsor/documents/<document_id>', methods=['GET','POST'])
 @login_required
-def documentedit_sponsor(document_id):
+def documentedit_sponsor(document_id,request):
 
     # query for the document_id in question to get the object
     document = db.session.query(Document).filter_by(id = document_id)[0]
 
+    # create list of editors
+    # pull table of editors object from database
+    editors = db.session.query(User).filter_by(user_type = 'editor')
+    # start a blank list into which we will put tuples (id,Name)
+    editorlist = [(0,'None')]
+    # use sqlalchemy count() method to count all editors
+    editorcount = editors.count()
+    # loop through editors object, populating (id, Name) into a list
+    for counter in range(0,editorcount):
+        # append tuples of (id, Name)
+        editorlist.append((editors[counter].id,editors[counter].name))
+
     # new document form
-    form = NewDocumentForm()
+    form = DocumentForm(request.POST,obj=editorchoice)
 
     if form.validate_on_submit():
         # take new document
@@ -143,7 +176,10 @@ def documentedit_sponsor(document_id):
         # index [0], which is the row in question for document name
         document.document_name = form.document_name.data
         document.document_body = form.document_body.data
-        
+        # display choices from list of editors
+
+        form.editorchoice.choices = editorlist
+
         # commit changes
         db.session.commit()
 
@@ -159,7 +195,8 @@ def documentedit_sponsor(document_id):
         'documentedit_sponsor.jinja2',
         form=form,
         selector=selector,
-        document=document
+        document=document,
+        editorchoice=editorchoice
         )
 
 

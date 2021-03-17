@@ -60,7 +60,7 @@ class LoginForm(FlaskForm):
 
 
 
-class NewDocumentForm(FlaskForm):
+class DocumentForm(FlaskForm):
     """Create New Document Form."""
     document_name = StringField(
         'Document Name',
@@ -70,13 +70,8 @@ class NewDocumentForm(FlaskForm):
         'Document Body',
         validators=[Optional()]
     )
+    editorchoice = SelectField(
+        u'Editor',
+        coerce=int
+    )
     submit = SubmitField('Submit')
-
-
-class PastebinEntry(FlaskForm):
-    language = SelectField(
-        u'Programming Language', 
-        choices=[('cpp', 'C++'), 
-        ('py', 'Python'), 
-        ('text', 'Plain Text')]
-        )
