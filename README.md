@@ -4543,6 +4543,115 @@ class PastebinEntry(FlaskForm):
 ```
 #### Dynamic Entries for Dropdown Form
 
+So now that I have created a dropdown form, the next step is to be able to populate said dropdown form with dynamic entries - basically items from a database.
+
+Something to keep in mind is that there are actually *two* forms plugins that utilize forms, and the documentation for these are in different websites:
+
+* [WTForms at Pypi](https://pypi.org/project/WTForms/), with documentation at [WTForms](https://wtforms.readthedocs.io/en/2.3.x/)
+* [Flask-WTF at Pypi](https://pypi.org/project/Flask-WTF/) with documentation at [flask-wtf](https://flask-wtf.readthedocs.io/en/stable/), for which I am using Flask-WTF==0.14.3.
+
+Since Flask-WTF is an integration, all of the documentation for WTForms works the same.  Again, the field used for dropdowns is [SelectField](https://wtforms.readthedocs.io/en/2.3.x/fields/#wtforms.fields.SelectField).
+
+The format, with "PROMPT" being the prompt ahead of the field, and "CHOICES" being a list of value, label pairs.
+
+```
+SelectField(
+    u'PROMPT',
+    CHOICES
+    )
+```
+So our main challenge is creating a list of value, label pairs, which can then be placed in, "CHOICES".
+
+The default setup for fields with dynamic choice values is as follows [from this documentation](https://wtforms.readthedocs.io/en/2.3.x/fields/#wtforms.fields.SelectField):
+
+```
+class UserDetails(Form):
+    group_id = SelectField(u'Group', coerce=int)
+
+def edit_user(request, id):
+    user = User.query.get(id)
+    form = UserDetails(request.POST, obj=user)
+    form.group_id.choices = [(g.id, g.name) for g in Group.query.order_by('name')]
+```
+So the first thing we need to do is query for our Editors, and figure out how to get that into a list of pairs with, (id, Name) being the pairs.
+
+```
+editors = db.session.query(User).filter_by(user_type = 'editor')
+
+>>> editors[0].name
+John Smith
+
+>>> editors[0].id
+2
+
+```
+Since this works, to create a list of pairs. I want to reduce the number of queries on the database, so a loop through the 'editors' object after having done one query would be best, we could do:
+
+```
+# pull table of editors object from database
+editors = db.session.query(User).filter_by(user_type = 'editor')
+
+# start a blank list
+editorlist = []
+# use sqlalchemy count() method to count all editors
+editorcount = editors.count()
+
+# loop through editors object, populating (id, Name) into a list
+for counter in range(0,editorcount):
+    # append tuples of (id, Name)
+    editorlist.append((editors[counter].id,editors[counter].name))
+
+```
+This successfully creates a list of tuples including the editor name and id.  So, the next task is to integrate it into our, NewDocumentForm, or as we have renamed it, DocumentForm.
+
+```
+class DocumentForm(FlaskForm):
+    """Create New Document Form."""
+    document_name = StringField(
+        'Document Name',
+        validators=[Optional()]
+    )
+    document_body = StringField(
+        'Document Body',
+        validators=[Optional()]
+    )
+    editorchoice = SelectField(
+        u'Editor', 
+        coerce=int
+    )
+    submit = SubmitField('Submit')
+    
+```
+
+Note that we use coerce=int, this is because data on a webpage is always strings, we are attempting to coerce string numbers back into integers, per the documentation:
+
+> Select fields take a choices parameter which is a list of (value, label) pairs. It can also be a list of only values, in which case the value is used as the label. The value can be any type, but because form data is sent to the browser as strings, you will need to provide a coerce function that converts a string back to the expected type.
+
+For the usage of the actual form, we have to use something along the lines of form.editorchoice.choices, and add this to our route function.
+
+Starting out with our document editor route, we can add:
+
+```
+    if form.validate_on_submit():
+        # take new document
+        # edit document parameters
+        # index [0], which is the row in question for document name
+        document.document_name = form.document_name.data
+        document.document_body = form.document_body.data
+        # display choices from list of editors
+        form.editorchoice.choices = editorlist
+
+        # commit changes
+        db.session.commit()
+```
+Once we have verified that the above works to create an actual list of editors to select from, we can create logic which writes a new editor_id to the retention database for that document in question.
+
+Now, the problem is of course, once we modify the "DocumentForm" which is our only form, we can no longer use it to submit a new document, meaning our database for documents is empty, so we can't get to the, "View Document" link for any given document anymore.  This means we have to start working with the, "Create New Document" route first, ensure that everything works there, and then pivot back to the "Edit Document" route to finish it up.
+
+So reflecting on this, one of the advantages of code inherentance and building based upon re-use of code, is that less code needs to be written and it's easier to read through. One of the disadvantages is that if there are, "subsequent" functions that happen sequentially in time, one after another, you can't debug the subsequent interface until the starter interface has been built already - unless you have a function that seeds the database!
+
+
+#### Adding editor.id to Relations Table
 
 ### Finishing Up Editor Views
 
