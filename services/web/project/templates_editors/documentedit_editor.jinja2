@@ -14,7 +14,7 @@
 
   <div>
 
-    <p><h4>Edit Your Document Below</h4></p>
+    <p><h4>Edit Your Assigned Document Below</h4></p>
 
     <hr>
 
@@ -32,20 +32,17 @@
 
     <table class="tg" style="undefined;table-layout: fixed; width: 580px">
     <colgroup>
-    <col style="width: 100px">
     <col style="width: 200px">
     <col style="width: 350px">
     </colgroup>
     <thead>
       <tr>
-        <th class="tg-73oq">Editor</th>
         <th class="tg-73oq">Document Title</th>
         <th class="tg-73oq">Document Content</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td class="tg-73oq">{{ editor.name }}</td>
         <td class="tg-73oq">{{ document.document_name }}</td>
         <td class="tg-73oq">{{ document.document_body }}</td>
       </tr>
@@ -86,14 +83,6 @@
 
       <p></p>
 
-      Editor Choice 
-      {{ form.editorchoice }}
-
-      <p></p>
-
-
-      <p></p>
-
       <div class="submit-button">
          {{ form.submit }}
       </div>
@@ -106,7 +95,7 @@
   <p></p>
 
   <div>
-    <a href="{{ url_for('sponsor_bp.documentlist_sponsor') }}">List of Documents</a>
+    <a href="{{ url_for('editor_bp.documentlist_editor') }}">List of Documents</a>
   </div>
 
   <p></p>
