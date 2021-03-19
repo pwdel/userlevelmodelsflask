@@ -4856,7 +4856,7 @@ However, this does not have to deal with inheritance, this has to deal with mult
 
 > One of the most common situations to deal with is when there are more than one foreign key path between two tables.
 
-We need to figure out how to change our backreferences.
+We need to figure out how to change our backreferences potentially:
 
 ```
     """backreferences to user and document tables"""
@@ -4871,10 +4871,402 @@ We need to figure out how to change our backreferences.
         )
 ```
 
+[From the SQLAlchemy Documentation](https://docs.sqlalchemy.org/en/14/orm/join_conditions.html#handling-multiple-join-paths) gives an example where:
 
+> "Consider a Customer class that contains two foreign keys to an Address class"
+
+In our situation, that translates to:
+
+> "Consider a Retentions class that contains two foreign keys to a User Class"
+
+The documentation wants to read the error precisely, to understand how to diagnose the problem. "There are many potential messages that have been carefully tailored to detect a variety of common configurational issues; most will suggest the additional configureation that is needed."  So what does our error suggest?
+
+> Could not determine join condition between parent/child tables on relationship User.documents - there are multiple foreign key paths linking the tables.  Specify the 'foreign_keys' argument, providing a list of those columns which should be counted as containing a foreign key reference to the parent table.
+
+So what the error is talking about is that our documents relationship under the User table has a problem:
+
+```
+    """backreferences User class on retentions table"""    
+    documents = relationship(
+        'Retention',
+        back_populates='user'
+        )
+```
+We should specify the, "foreign_keys" providing a list of columns which shouldb e counted as containing a foreign key reference to the parent table (User).
+
+Which columns point to the parent table (User)?  We have two columns within the "Retentions" class that point to this User table.
+
+```
+    sponsor_id = db.Column(
+        db.Integer, 
+        db.ForeignKey('users.id'),
+        primary_key=True,
+        unique=False,
+        nullable=True
+    )
+
+    editor_id = db.Column(
+        db.Integer, 
+        db.ForeignKey('users.id'),
+        unique=False,
+        nullable=True
+    )
+```
+So using the [foreign_keys argument](https://docs.sqlalchemy.org/en/13/orm/relationship_api.html#sqlalchemy.orm.relationship.params.foreign_keys) documentation.  The documentation states:
+
+> In normal cases, the relationship.foreign_keys parameter is not required. relationship() will automatically determine which columns in the relationship.primaryjoin condition are to be considered “foreign key” columns based on those Column objects that specify ForeignKey, or are otherwise listed as referencing columns in a ForeignKeyConstraint construct.
+
+> When specifying foreign_keys with Declarative, we can also use string names to specify, however it is important that if using a list, the list is part of the string: "[list1,list2]"
+
+```
+    """backreferences User class on retentions table"""    
+    documents = relationship(
+        'Retention',
+        foreign_keys='[Retention.sponsor_id,Retention.editor_id]',
+        back_populates='user'
+        )
+```
+This does not seem to clear the error, so it might be that we have to specify the foreign keys within the Retention class.
+
+If we instead add foreign_keys to the retentions table, as shown:
+
+```
+    """backreferences to user and document tables"""
+    user_sponsor = db.relationship(
+        'User',
+        foreign_keys='[users.id]',
+        back_populates='documents'
+        )
+
+    user_editor = db.relationship(
+        'User',
+        foreign_keys='[users.id]',
+        back_populates='documents'
+        )
+```
+When we add the above, we get a, "mapper failed to initialize" error on User.query.get(user_id):
+
+> sqlalchemy.exc.InvalidRequestError: One or more mappers failed to initialize - can't proceed with initialization of other mappers. Triggering mapper: 'mapped class User->users'. Original exception was: Could not determine join condition between parent/child tables on relationship User.documents - there are multiple foreign key paths linking the tables.  Specify the 'foreign_keys' argument, providing a list of those columns which should be counted as containing a foreign key reference to the parent table.
+
+So, perhaps eliminating the foreign_keys argument within the documents = relationship() portion of the User class would solve this. However, when we eliminate that, we still get an AmbiguousForeignKeysError.
+
+Perhaps the error is wrong.  We could go back to the example given at the SQLAlchemy Documentation](https://docs.sqlalchemy.org/en/14/orm/join_conditions.html#handling-multiple-join-paths):
+
+> "Consider a Retentions class that contains two foreign keys to a User Class"
+
+In this example, the Customer class has two columns foreign keys to an Address class, address.id.  Whereas in our scenario, our Retentions table has two columns with ForeignKeys to our user.id.
+
+The solution seems to be to have one relationship argument, which includes a string linking to both mapped keys.
+
+##### Considering Going a Different Route - Editor Table
+
+After removing the following, everything works:
+
+```
+
+    editor_id = db.Column(
+        db.Integer, 
+        db.ForeignKey('users.id'),
+        unique=False,
+        nullable=True
+    )
+```
+
+Everything works again.  Why can't we have one document pointing to two users?  Why can't we establish shared ownership?  This seems ridiculous.  I phoned a senior developer friend, who agreed with the idea that we should be able to create a workable single-inheretance table.
+
+Probably what I have to do is read through the entire documentation for the relationship() function on SQLAlchemy.  Previous in this project, I read through the SQLAlchemy documentation, but kind of skipped through relationship() because it was fairly long. I may just need to go back in and comb through it.
+
+No problem can withstand the assault of sustained thinking.
+
+###### Combing through SQLAlchemy relationship()
+
+Relationship:
+
+> Provides a relationship between two mapped classes.  This corresponds to a parent-child or associative table relationship. The constructed class is an instance of [RelationshipProperty](https://docs.sqlalchemy.org/en/14/orm/internals.html#sqlalchemy.orm.RelationshipProperty).
+
+Classical mapping:
+
+> mapper(Parent, properties={
+> 'children': relationship(Child)
+> })
+
+> Some arguments accepted by relationship() optionally accept a callable function, which when called produces the desired value.  The callable is invoked by the parent, "Mapper" at "mapper initialization" time, only when mappers are first used. This can be used to resolve order-of declaration and other dependency issues.
+
+> When using the Declarative Extensions, the Declarative initializer allows string arguments to be passed to, "relationship()". These string arguments are converted into callables that evaluate the string as Python code.
+
+Another consieration, is to think about the parent-child relationship. How does parent-child work?  The parent has a primary id, like user_id, which gets placed on the child table as a column. So with an association table, the association table is always a child of the other two parent tables.
+
+*Parameters*
+
+```
+ function sqlalchemy.orm.relationship(argument, secondary=None, primaryjoin=None, secondaryjoin=None, foreign_keys=None, uselist=None, order_by=False, backref=None, back_populates=None, overlaps=None, post_update=False, cascade=False, viewonly=False, lazy='select', collection_class=None, passive_deletes=False, passive_updates=True, remote_side=None, enable_typechecks=True, join_depth=None, comparator_factory=None, single_parent=False, innerjoin=False, distinct_target_key=None, doc=None, active_history=False, cascade_backrefs=True, load_on_pending=False, bake_queries=True, _local_remote_pairs=None, query_class=None, info=None, omit_join=None, sync_backref=None)
+```
+
+* argument - a mapped class, or Mapper instance, representing the target of the relationship.
+
+* secondary - for a many-to-many relationship, it specifies the intermediary table, and typicaly is an instance of Table. This may also be passed as a callable function. relationship.secondary keyword argument is applied in the case where the intermediary Table is not expressed in any direct class mapping. If the secondary table is explicitly mapped elsewhere, e.g. an association object, it may cause a conflict.
+
+* active_history=False - when True, indicates that the previous value for a many to one reference should be loaded when replaced, if not already loaded. History tracking logci for many-to-ones normally only needs to be aware of the, "new" value in order to perform a flush. This is available for applications which make use of, "get_history()" to know the previous value of an attribute.
+
+* backref = indicates the string name of a property to be placed in the mapper's class that will handle this relationship in the other direction. Can be passed as a backref() object to control the configuration ofthe new relationship.  The relationship.backref/relationship.back_populates behavior has the advantage that common bidirectional operations can reflect the correct state without requiring a database round trip.
+
+* back_populates - has the same meaning as backref, but the complementing property is not created automatically and must be explicitly created.
+
+* overlaps - target mapper with which this relationship may write to the same foreign keys upon persistence. This eliminates the warning that the relationship will conflict with another upon persistence. This is only to be used for relationships that are truly conflicting with one another.
+
+* bake_queries=True - cache the construction of SQL used in lazy loads. 
+
+* cascade - comma sepearted list of cascade rules which determines how Session operations should be cascaded from parent to child. The default is False, which means the default is used, "save-update, merge."  There are other standard operations, ways to delete orphans, etc.
+
+* cascade_backrefs=True - boolean value indicating if save-update cascade shold operate along an assignment event intercepted by a backref.
+
+* collection_class - returns a list-holding object
+
+* comparator_factory - extends comparator which provides custom SQL clause generation.
+
+* distinct_target_key=None
+
+* doc - Docstring which will be applied to the resulting descriptor.
+
+* foreign_keys - a list of columns which are to be used as foreign key columns, or columns which refer to the value in a remote column, within the context of this relationship() object's relationship.primaryjoin condition.
+
+* info - optional data dictionary which will be populated into MapperPRoperty.info
+
+* innerjoin=False - when true, joined eager loads will use inner join to join against related tables instead of an outer join. The purpose of this option is generally one of performance, as inner joins generally perform better than outer joins.
+
+* order_by - indicatres the orderign that should be applied when loading these items. relationship.order_by is expected to refer to one of the Column objects to which the target class is mapped.
+
+* primaryjoin - used as the primary join of a child object against the parent object, in a many-to-many relationship, the join of the parent object to the association table. By default this value is computed based upon the foreign key relationships of the parent and child tables (or association tables)
+
+* remote_side - used for soft referential relationships, indicates the column or list of columns that form the remote side of the relationship.
+
+* query_class - Query subclass that will be used internally returned by a dynamic relatinship, that is , a relationship that specifies lazy="dynamic"
+
+* secondaryjoin - will be used as the join associaton table to the child object. By default, this value is computed based upon the foreign key relationships of the assocation and child tables.
+
+* single_parent - installs a validator that will prevent objects from being associated with more than one parent at a time
+
+* uselist - boolean that indicates of this property should be loaded as a list or a scalar.
+
+* viewonly=False - when set to true, relationship is used only for loading objects, not for any persistence operation. So basically, a super static record of what's going on in the relationship table.
+
+
+#### Specifying Alternate Join Conditions
+
+[Specifying alternate join conditions](https://docs.sqlalchemy.org/en/14/orm/join_conditions.html#relationship-primaryjoin).  
+
+> The default behavior of relationship() when constructing a join is that it equates the value of primary key columns on one side to that of foreign-key-referring columns on the other. We can change this criterion to be anything we’d like using the relationship.primaryjoin argument, as well as the relationship.secondaryjoin argument in the case when a “secondary” table is used.
+
+So typically you have a 1:1 relationship between primary keys and foreign keys.  We can change this with primaryjoin and secondaryjoin.  primaryjoin can be used to filter for certain types of data elements within a foreign key address.
+
+From the documentation:
+
+```
+class User(Base):
+    ...
+    boston_addresses = relationship("Address",
+                    primaryjoin="and_(User.id==Address.user_id, "
+                        "Address.city=='Boston')")
+
+class Address(Base):
+    __tablename__ = 'address'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('user.id'))
+
+    ...
+    city = Column(String)
+    ...
+
+```
+
+* Used the and_() conjunection to construct two predicates for the join condition, joining User.id and Address.user_id to each other, and limiting rows in Address to just city='Boston'.  Typically this only comes into effect at query time, so when someone queries .boston_addresses specifically.
+
+So could we use the following, in the User class, to specify our primary join being sponsor_id and contingent upon string, 'sponsor'?
+
+```
+class Retention(db.Model):
+    sponsor_user = relationship(primaryjoin="and_"(User.id==Retention.sponsor_id, "
+        "User.user_type=='sponsor')")
+
+```
+However, we don't want an object strictly called, "sponsor_user," or "editor_user" unless we can eliminate the ambiguous relationship, "user" that we currently have, which looks like this:
+
+```
+    user = db.relationship(
+        'User',
+        back_populates='documents'
+        )
+```
+
+So we could start off by writing a new relationship to replace sponsor_id to start off with:
+
+```
+sponsor_id = db.Column(
+    db.Integer
+    db.ForeignKey('users.id'),
+    primary_key=True,
+    unique=False,
+    nullable=True
+)
+
+sponsor_user = db.relationship(primaryjoin="and_"(User.id==Retention.sponsor_id, "
+        "User.user_type=='sponsor')")
+
+```
+Attempted to use a primaryjoin relationship on the retentions table as follows, eliminated the "user" relationship.
+
+```
+
+    """backreferences to user and document tables"""
+
+    # type sponsor user, 
+    # using primaryjoin to specify the user_type only as sponsor for when the User.id refers to Retention.sponsor_id
+    sponsor_user = db.relationship("User",
+        primaryjoin="and_(User.id==Retention.sponsor_id, "
+        "User.user_type=='sponsor')")
+
+    # opening up to editor_id as well
+    editor_user = db.relationship("User",
+        primaryjoin="and_(User.id==Retention.editor_id, "
+        "User.user_type=='editor')")
+
+```
+
+However, since user is so critical in the login functionality, this doesn't compute.  We need to maintain the "user" backreference to avoid breaking login functionality overall.  The above was meant to replace the need for ForeignKey.
+
+There seems to be a trap between, "ambiguous foreign keys" and "can't find any foreign keys"
+
+#### Self-Referential Many to Many Relationship
+
+[Self Referential Many to Many Relationship](https://docs.sqlalchemy.org/en/14/orm/join_conditions.html#self-referential-many-to-many)
+
+If the association table refers twice to the one of the same classes, for example:
+
+```
+class Node(Base)
+...
+
+Table(...,
+Column("left_id",Integer,ForeignKey("node.id"),primary_key=True),
+Column("right_id",Integer,ForeignKey("node.id"),primary_key=True)
+)
+```
+SQLAlchemy can't automatically know which columns should connect to which for the right_nodes and left_nodes relationships.
+
+[relationship.primaryjoin](https://docs.sqlalchemy.org/en/14/orm/relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin), [relationship.secondaryjoin](https://docs.sqlalchemy.org/en/14/orm/relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin) establish how we would like to join the association table.
+
+##### Taking a Shortcut and Eliminating db.ForeignKey from editor_id in Retention
+
+Out of all of the above, the only thing that seems to work is to eliminate the editor_id frmo the Retention table, and to make the relationship very basic.
+
+We could probably write our own custom logic to deal with editor assignments in the Retention table.  Basically we only ever write integers into that column who are editors.
+
+The other route to go would be to create a completely seperate user type, an "Editor_User," with a completely different login function.
 
 
 #### Adding editor.id to Relations Table
+
+Intersting side note, if we take out the ForeignKey('users.id') from the editor_id column in the Retentions class, the app still seems to work:
+
+```
+    editor_id = db.Column(
+        db.Integer, 
+        primary_key=True,
+        unique=False,
+        nullable=True
+    )
+
+```
+
+Does this column really need to be mapped to a user?  What if this column is just a record of numbers, and we don't really bother to see whether those numbers exist or not?  What would be the disadvantage?
+
+The disadvantage might be that if an editor gets deleted, or if that account no longer exists, then the table might not know what to do, the editor_id might not get notified or updated somehow in our Retentions table automatically.  So, presumably, we would need to write this updating code anyway, right?
+
+There might also be confusions about what is actually available.
+
+So to start off with, when we attempt to add a new value, even if it does not include an editor, we get the following error:
+
+```
+sqlalchemy.exc.IntegrityError
+
+sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "editor_id" of relation "retentions" violates not-null constraint
+DETAIL:  Failing row contains (2, 2, null, 2).
+```
+Previously we had solved this by inserting an autoincrement function.  We actually do want null values to be a possible answer.  If we populated our, "write" to the database with a string value, this error was cleared.
+
+As to how we populate our database with our actual editor_id, that is another question.
+
+```
+form.editorchoice.query = User.query.filter(User.user_type == 'editor')
+...
+
+# extract the selected editor choice from the form
+selected_editor_id=form.editorchoice.data
+
+# create a new retention entry
+newretention = Retention(
+    sponsor_id=user_id,
+    editor_id=selected_editor_id,
+    document_id=newdocument_id
+    )
+```
+In the above, we grab the choice from the form at form.editorchoice.query, which is filtered from the editor user types.
+
+However, when we do this, we get an error: "sqlalchemy.exc.ProgrammingError: <unprintable ProgrammingError object>" - basically, the form.editorchoice.data is an object, and can't be read.
+
+If we look under the flask shell what that object looks like:
+
+```
+>>> selected_editor = User.query.filter(User.user_type == 'editor')
+
+
+>>> selected_editor[0].id 
+1
+
+>>> type(selected_editor[0].id)                                                                                                         
+<class 'int'>
+
+```
+So basically, we can get the id to populate into the Retention table.  However, this might not be the right way to do this.  SQLAlchemy has a get() function.  However, get() is more for grabbing objects and properties of those objects based upon a known identify, so that won't do it.  We need to pull the identity itself.
+
+There is also the problem of datatypes.  editor_id is supposed to be an integer.
+
+```
+    editor_id = db.Column(
+        db.Integer, 
+        unique=False,
+        nullable=True
+    )
+```
+Whereas above we see that our query on the shell was an int, data from forms might instead be strings. So, we might need to convert this to an int in order for it to populate.  The following works:
+
+```
+# extract the selected editor choice from the form
+selected_editor_id=int(form.editorchoice.data.id)
+```
+Testing it out with a couple different editors:
+
+```
+userlevels_flask_dev=# SELECT * FROM retentions;                                                                                        
+ id | sponsor_id | editor_id | document_id                                                                                              
+----+------------+-----------+-------------                                                                                             
+  1 |          2 |         1 |           4                                                                                              
+  2 |          2 |         1 |           5                                                                                              
+  3 |          2 |         3 |           6 
+```
+It works.
+
+#### Fixing Indvidual Document Routes and Views
+
+To fix the following:
+
+```
+@sponsor_bp.route('/sponsor/documents/<document_id>', methods=['GET','POST'])
+@login_required
+def documentedit_sponsor(document_id):
+```
+We need to mimic what we successfully built in the, "newdocument" form above.
+
 
 ### Finishing Up Editor Views
 

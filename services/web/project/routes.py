@@ -94,12 +94,12 @@ def newdocument_sponsor():
         user_id = current_user.id
 
         # extract the selected editor choice from the form
-        # editor_id=form.editorchoice.data.id
+        selected_editor_id=int(form.editorchoice.data.id)
 
         # create a new retention entry
         newretention = Retention(
             sponsor_id=user_id,
-
+            editor_id=selected_editor_id,
             document_id=newdocument_id
             )
         
@@ -142,7 +142,7 @@ def documentlist_sponsor():
 
 @sponsor_bp.route('/sponsor/documents/<document_id>', methods=['GET','POST'])
 @login_required
-def documentedit_sponsor(document_id,request):
+def documentedit_sponsor(document_id):
 
     # query for the document_id in question to get the object
     document = db.session.query(Document).filter_by(id = document_id)[0]
@@ -175,8 +175,6 @@ def documentedit_sponsor(document_id,request):
         # commit changes
         db.session.commit()
 
-    # editor selector
-    selector = PastebinEntry()
 
         # test out selector form
     if selector.validate_on_submit():

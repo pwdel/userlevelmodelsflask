@@ -180,7 +180,6 @@ class Retention(db.Model):
 
     editor_id = db.Column(
         db.Integer, 
-        db.ForeignKey('users.id'),
         unique=False,
         nullable=True
     )
