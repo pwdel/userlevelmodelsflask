@@ -46,6 +46,12 @@ def logoutsponsor():
 @sponsor_bp.route('/sponsor/dashboard', methods=['GET','POST'])
 @login_required
 def dashboard_sponsor():
+
+    # checking if user type is sponsor
+    # ret = sponsor_only()
+    # if( not ret ):
+    #    return ret
+
     """Logged-in User Dashboard."""
     return render_template(
         'dashboard_sponsor.jinja2',
@@ -109,8 +115,8 @@ def newdocument_sponsor():
 
          # message included in the route python function
         message = "New Document saved. Create another document if you would like."
-        # if everything goes well, they will be redirected to newdocument
-        return render_template('dashboard_sponsor.jinja2',form=form)
+        # if everything goes well, they will be redirected to documents list
+        return redirect(url_for('sponsor_bp.documentlist_sponsor'))
 
     return render_template('newdocument_sponsor.jinja2',form=form)
 
@@ -121,22 +127,36 @@ def documentlist_sponsor():
     """Logged-in Sponsor List of Documents."""
     # get the current user id
     user_id = current_user.id
+    
+    # Document objects and list, as well as Editor objects and list
+    # this logic will only work if document_objects.count() = editor_objects.count()
     # get document objects filtered by the current user
     document_objects = db.session.query(Document).join(Retention, Retention.document_id == Document.id).filter(Retention.sponsor_id == user_id)
+    # editor per document objects
+    editor_perdocument_objects = db.session.query(User).join(Retention, Retention.editor_id == User.id).filter(Retention.sponsor_id == user_id)
     # get a count of the document objects
     document_count = document_objects.count()
-    # blank list to append to
+    editorobjects_count = editor_perdocument_objects.count()
+    # blank list to append to for documents and editors
     document_list=[]
+    editor_name_list=[]
     # loop through document objects
     for counter in range(0,document_count):
         document_list.append(document_objects[counter])
+        editor_name_list.append(editor_perdocument_objects[counter].name)
 
     # show list of document names
     documents = document_list
 
+    # Editor objects and list
+    # get editor objects filtered by the 
+    editors = editor_name_list
+
+
     return render_template(
         'documentlist_sponsor.jinja2',
-        documents=documents
+        documents=documents,
+        editors=editors
     )
 
 
@@ -144,23 +164,28 @@ def documentlist_sponsor():
 @login_required
 def documentedit_sponsor(document_id):
 
+    # new document form
+    form = DocumentForm()
+
+
+    # Getting the Document Object
     # query for the document_id in question to get the object
     document = db.session.query(Document).filter_by(id = document_id)[0]
 
-    # create list of editors
-    # pull table of editors object from database
-    editors = db.session.query(User).filter_by(user_type = 'editor')
-    # start a blank list into which we will put tuples (id,Name)
-    editorlist = [(0,'None')]
-    # use sqlalchemy count() method to count all editors
-    editorcount = editors.count()
-    # loop through editors object, populating (id, Name) into a list
-    for counter in range(0,editorcount):
-        # append tuples of (id, Name)
-        editorlist.append((editors[counter].id,editors[counter].name))
+    # Getting the Retention Object to Filter  for Editor ID
+    # join query to get and display current editor id via the retention object
+    retention_object = db.session.query(Retention).join(User, User.id == Retention.editor_id).filter(Retention.document_id == document_id)[0]
+    # get current editor_id from retention object
+    current_editor_id = retention_object.editor_id
+    
+    # Getting the Editor Object
+    # use this current editor object
+    current_editor_object = db.session.query(User).filter(User.id == current_editor_id)[0]
+    # simplify variable name to pass to view
+    editor = current_editor_object
 
-    # new document form
-    form = DocumentForm(request.POST,obj=editorchoice)
+    # display choices from list of editors
+    form.editorchoice.query = User.query.filter(User.user_type == 'editor')
 
     if form.validate_on_submit():
         # take new document
@@ -168,25 +193,25 @@ def documentedit_sponsor(document_id):
         # index [0], which is the row in question for document name
         document.document_name = form.document_name.data
         document.document_body = form.document_body.data
-        # display choices from list of editors
 
-        form.editorchoice.choices = editorlist
+        # grab the selected_editor_id from the form
+        selected_editor_id=int(form.editorchoice.data.id)
+
+        # add new retention
+        retention_object.editor_id = selected_editor_id
 
         # commit changes
         db.session.commit()
 
-
-        # test out selector form
-    if selector.validate_on_submit():
-        lang = selector.language.data
+        # redirect to document list after change
+        return redirect(url_for('sponsor_bp.documentlist_sponsor'))
 
 
     return render_template(
         'documentedit_sponsor.jinja2',
         form=form,
-        selector=selector,
         document=document,
-        editorchoice=editorchoice
+        editor=editor
         )
 
 
@@ -210,3 +235,78 @@ def dashboard_editor():
         template='layout',
         body="Welcome to the Editor Dashboard."
     )
+
+@editor_bp.route('/editor/documents', methods=['GET','POST'])
+@login_required
+def documentlist_editor():
+    """Logged-in Sponsor List of Documents."""
+    # get the current user id
+    user_id = current_user.id
+    
+    # Document objects and list, as well as Editor objects and list
+    # this logic will only work if document_objects.count() = editor_objects.count()
+    # get document objects filtered by the current user
+    document_objects = db.session.query(Document).join(Retention, Retention.document_id == Document.id).filter(Retention.editor_id == user_id)
+
+    # get a count of the document objects
+    document_count = document_objects.count()
+    
+    # blank list to append to for documents and editors
+    document_list=[]
+    
+    # loop through document objects
+    for counter in range(0,document_count):
+        document_list.append(document_objects[counter])
+    
+    # show list of document names
+    documents = document_list
+
+    
+    return render_template(
+        'documentlist_editor.jinja2',
+        documents=documents,
+    )
+
+
+@editor_bp.route('/editor/documents/<document_id>', methods=['GET','POST'])
+@login_required
+def documentedit_editor(document_id):
+
+    # new document form
+    form = DocumentForm()
+
+    # Getting the Document Object
+    # query for the document_id in question to get the object
+    document = db.session.query(Document).filter_by(id = document_id)[0]
+    
+    if form.validate_on_submit():
+        # take new document
+        # edit document parameters
+        # index [0], which is the row in question for document name
+        document.document_name = form.document_name.data
+        document.document_body = form.document_body.data
+
+        # commit changes
+        db.session.commit()
+
+        # redirect to document list after change
+        return redirect(url_for('editor_bp.documentlist_editor'))
+
+
+    return render_template(
+        'documentedit_editor.jinja2',
+        form=form,
+        document=document,
+        )
+
+
+# ---------- Page Access Restrictions ----------
+
+def sponsor_only():
+
+    current_user_id = current_user.id
+    current_user_type = User.query.filter(User.id == current_user_id)[0].user_type
+
+    if not current_user_type == 'sponsor':
+        flash('You do not have access to view this page.')
+        return redirect(url_for('editor_bp.dashboard_editor'))

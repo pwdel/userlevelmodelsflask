@@ -5267,16 +5267,302 @@ def documentedit_sponsor(document_id):
 ```
 We need to mimic what we successfully built in the, "newdocument" form above.
 
+We can eliminate our ad-hoc way of creating a list of editors:
+
+```
+    # create list of editors
+    # pull table of editors object from database
+    editors = db.session.query(User).filter_by(user_type = 'editor')
+    # start a blank list into which we will put tuples (id,Name)
+    editorlist = [(0,'None')]
+    # use sqlalchemy count() method to count all editors
+    editorcount = editors.count()
+    # loop through editors object, populating (id, Name) into a list
+    for counter in range(0,editorcount):
+        # append tuples of (id, Name)
+        editorlist.append((editors[counter].id,editors[counter].name))
+```
+
+After cleaning up the sponsor/document/<number> route, we get a working version as shown below:
+
+```
+@sponsor_bp.route('/sponsor/documents/<document_id>', methods=['GET','POST'])
+@login_required
+def documentedit_sponsor(document_id):
+
+    # new document form
+    form = DocumentForm()
+
+    # query for the document_id in question to get the object
+    document = db.session.query(Document).filter_by(id = document_id)[0]
+
+    # display choices from list of editors
+    form.editorchoice.query = User.query.filter(User.user_type == 'editor')
+
+
+    if form.validate_on_submit():
+        # take new document
+        # edit document parameters
+        # index [0], which is the row in question for document name
+        document.document_name = form.document_name.data
+        document.document_body = form.document_body.data
+
+        # display choices from list of editors
+        form.editorchoice.choices = editorlist
+
+        # commit changes
+        db.session.commit()
+
+
+    return render_template(
+        'documentedit_sponsor.jinja2',
+        form=form,
+        document=document,
+        )
+```
+To display the editor name at the top of the page, we have to do a query. We don't have the editor_id directly, but we can find it from the retention table using a join query:
+
+We have the document_id, and can use document_id=1 as a stand-in.  We want to query the Retention table and filter it for that document_id
+
+```
+>>> current_editor_object = db.session.query(Retention).filter_by(document_id=document_id) 
+
+>>> current_editor_object[0]
+<Retention 1,2,1>
+
+>>> current_editor_object[0].editor_id                        
+1    
+
+>>> editor_id = 1
+
+>>> current_editor = db.session.query(User).filter_by(id=editor_id)
+
+
+```
+
+Using a join query:
+
+```
+>>> q = db.session.query(Retention).join(User, User.id == Retention.editor_id).filter(Retention.document_id == document_id)
+
+>>> q[0]         
+<Retention 1, 2, 1>
+
+>>> q[0].editor_id
+1
+
+>>> current_editor_id = db.session.query(Retention).join(User, User.id == Retention.editor_id).filter(Retention.document_id == document_id)[0].editor_id
+
+>>> current_editor_id
+1
+
+>>> editor_object = db.session.query(User).filter(User.id == current_editor_id)[0]
+
+
+```
+With this information we can pass the editor_object to our view and display the name or any other needed information.
+
+The next step is to go in and edit the, "Retentions" table and add a new editor_id from whatever editor_id might be selected from the dropdown form.
+
+This was done with the following:
+
+```
+        # grab the selected_editor_id from the form
+        selected_editor_id=int(form.editorchoice.data.id)
+
+        # add new retention
+        retention_object.editor_id = selected_editor_id
+```
+#### Improving the Document List for Better User Feedback
+
+It would be helpful to include the editor attached to each document under the documentlist, for easier reference, in the same way we do on the edit document page.
+
+First, we have to get a list of editors object, which lines up with the document_objects.
+
+```
+>>> document_objects = db.session.query(Document).join(Retention, Retention.document_id == Document.id).filter(Retention.sponsor_id == user_id)
+```
+The above gives a list of document objects filtered by the current sponsor_id.  We want the same thing but for editor objects, filtered by the current sponsor_id.
+
+```
+>>> editor_perdocument_objects = db.session.query(User).join(Retention, Retention.editor_id == User.id).filter(Retention.sponsor_id == user_id)
+
+```
+Based upon this list of editors per document objects, we should be able to append to an editor list in the same way that we appended to a document list.  This logic will only work if there is a one to one relationship between the editors and documents.  Below is the augmented way of working with documents.
+
+```
+
+    # Document objects and list, as well as Editor objects and list
+    # this logic will only work if document_objects.count() = editor_objects.count()
+    # get document objects filtered by the current user
+    document_objects = db.session.query(Document).join(Retention, Retention.document_id == Document.id).filter(Retention.sponsor_id == user_id)
+    # editor per document objects
+    editor_perdocument_objects = db.session.query(User).join(Retention, Retention.editor_id == User.id).filter(Retention.sponsor_id == user_id)
+    # get a count of the document objects
+    document_count = document_objects.count()
+    editorobjects_count = editor_perdocument_objects.count()
+    # blank list to append to for documents and editors
+    document_list=[]
+    editor_name_list=[]
+    # loop through document objects
+    for counter in range(0,document_count):
+        document_list.append(document_objects[counter])
+        editor_name_list.append(editor_perdocument_objects[counter].name)
+
+    # show list of document names
+    documents = document_list
+
+    # Editor objects and list
+    # get editor objects filtered by the 
+    editors = editor_name_list
+
+```
+Finally, populating into jinja is a bit different, because we now have a list of name strings which is parallel to the list of document objects, so we're not combining them into the same object.  Therefore we have to take advantage of jinja's [loop.index0] way of indexing through a loop as shown below.
+
+    {% for document in documents %}
+      <tr>
+        <td class="tg-73oq">{{ editors[loop.index0] }}</td>
+
+#### Error on Editor Name Display
+
+The following query:
+
+```
+editor_perdocument_objects = db.session.query(User).join(Retention, Retention.editor_id == User.id).filter(Retention.sponsor_id == user_id)
+```
+Creates an error such that the wrong editor is shown on the last document.  The error is not in the for loop, but in the actual query.  If we query the base query:
+
+```
+>>> db.session.query(User).join(Retention, Retention.editor_id == User.id)[0].name                                                      
+'John Smith'                                                                                                                            
+>>> db.session.query(User).join(Retention, Retention.editor_id == User.id)[1].name                                                     
+'John Smith'                                                                                                                            
+>>> db.session.query(User).join(Retention, Retention.editor_id == User.id)[2].name                                                     
+'Second Editor'                                                                                                                         
+>>> db.session.query(User).join(Retention, Retention.editor_id == User.id)[3].name                                                     
+'Second Editor'                                                                                                                         
+>>> db.session.query(User).join(Retention, Retention.editor_id == User.id)[4].name                                                     
+'John Smith' 
+```
+As we can see, the proper names show up.  It is possible that we could filter the sponsor_id previous to the join to see if that clears things up.
+
+```
+editor_perdocument_objects = db.session.query(User).filter(Retention.sponsor_id == user_id).join(Retention, Retention.editor_id == User.id)
+```
+
+This could be because we set user_id to a fixed value in our flask shell as we were building this earlier.  However, if we check this, we see that we still have the same problem.
+
+Do we really need the filter() to get everything to work properly?  Well, yes because if we have different sponsors, they are going to hypothetically see each other's documents in the documentlist view, or rather editors will not line up properly and a list of all editors will get pulled on the routes function.
+
+What is the following statement really saying?
+
+```
+.join(Retention, Retention.editor_id == User.id)
+```
+
+What is User.id?  Basically User.id is the primary key we are using to JOIN the Retention table to the User table. Perhaps we shouldn't start off with that. Perhaps we should instead join by the sponsor_id, since that is what we are generating data for.
+
+```
+>>> db.session.query(Retention).filter(Retention.sponsor_id == user_id)[0].editor_id                                                                                  
+1                                                                                                                                                                     
+>>> db.session.query(Retention).filter(Retention.sponsor_id == user_id)[1].editor_id                                                                                 
+1                                                                                                                                                                     
+>>> db.session.query(Retention).filter(Retention.sponsor_id == user_id)[2].editor_id                                                                                
+3                                                                                                                                                                     
+>>> db.session.query(Retention).filter(Retention.sponsor_id == user_id)[3].editor_id                                                                                 
+3                                                                                                                                                                     
+>>> db.session.query(Retention).filter(Retention.sponsor_id == user_id)[4].editor_id                                                                                 
+1 
+```
+The above pattern does give the proper results that we are looking for. However how do we now display the names rather than just the id's, without querying the database in a for loop?
+
+```
+# querying for the Retention which will give the proper editor id in the order asked
+
+>>> sponsor_retentions = db.session.query(Retention).filter(Retention.sponsor_id == user_id)
+
+```
+Of course this only gives us the Retentions object, with no information about the editors. We need some kind of, "union" function in the database to pull precisely what we are trying to pull into an ordered object.  Or, we may need to reverse the entire quiery.
+
+```
+editor_names = db.session.query(Retention).filter(Retention.sponsor_id == user_id).join
+
+# generalized large table where the Retention.sponsor_id is the joining factor
+
+sponsor_objects = db.session.query(User).join(Retention, Retention.sponsor_id == User.id)
+
+# generalized large table where the Retention.editor_id is the joining factor
+
+editor_objects = db.session.query(User).join(Retention, Retention.editor_id == User.id)
+
+# filter down those editor_objects by the sponsor_id 
+
+We can't.
+
+
+```
+Probably the best course of action is to play around with all of this in SQL first, then translate it over to SQLALchemy.
+
+
+#### Adding Links to List and Dashboard
+
+* On documentlist - create a link to, "createnewdocument" - Done
+* On createnewdocument - create a link to, "documentlist" - Done
 
 ### Finishing Up Editor Views
 
-#### Limited Body Text Views - Sponsor First
+#### Editor List of Documents
 
+1. Create View
+2. Create Route
+3. Route Function, Logic
+
+Basically I was able to copy and paste a lot of code from the sponsor side to create this set of documents.
+
+#### Editing Individual Documents
+
+Same as above.
+
+
+### Restricting Access
+
+Beyond the capability of simply allowing editing, there must also be logic which actually restricts access to the user who is designated to see a particular page.
+
+Where does this apply?
+
+#### Mapping Out Access Restriction
+
+From the top down...
+
+1. Editors Should Not Be Able to See Sponsor Routes
+2. Sponsors Should Not Be Able to See Editor Routes
+3. Sponsors Should Not Be Able to Access Each Other's Documents
+4. Editors Should Not Be Able to Access Each Other's Documents
+
+#### Creating Editor Restriction Function
+
+We can set up a sponsor_only() function and put it within all sponsor routes.
+
+```
+def sponsor_only()
+    if not current_user.user_type == 'sponsor'
+        flash('You do not have access to view this page.')
+        return redirect(url_for('editor_bp.dashboard_editor'))
+```
+To add this to sponsor routes, use:
+
+```
+    # checking if user type is sponsor
+    ret = sponsor_only()
+    if( not ret ):
+        return ret
+```
+
+Since this is not easily working, we can cover this in the future when we deal with security and user interface.
 
 ### Adding Flash Messages
 
-
-### 
+We can cover this in the future, under, "UX"
 
 
 ## Logical Flows Diagramming - Summarization
@@ -5285,7 +5571,132 @@ To create the logic behind what user can see which dashboard, I used [Lucid onli
 
 ![](/readme_img/logical.png)
 
-We have all of the above built now, so it's time to introduce documents.
+## Putting Everything into Production
+
+* [Reference Guide for How We Went into Production Last Time](https://github.com/pwdel/postgresloginapiherokudockerflask#pushing-everything-to-production)
+* [With more detailed information here](https://github.com/pwdel/herokudockerflask#logging-into-heroku)
+
+
+* Copy envrionmental variables over from previous project, since the project is essentially the same on the server side.
+* We have to change the Postgres database name
+
+On the docker-compose.prod.yml file:
+
+```
+web:
+environment:
+    - DATABASE_URL=postgresql://userlevels_flask:userlevels_flask@db:5432/userlevels_flask_prod
+
+environment:
+      - POSTGRES_USER=userlevels_flask
+      - POSTGRES_PASSWORD=userlevels_flask
+      - POSTGRES_DB=userlevels_flask_prod
+```
+
+Other confusing variables:
+
+Will come back to this if needed.
+
+### Build Production File:
+
+```
+sudo docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+Log into Heroku CLI
+
+```
+$ sudo heroku container:login
+```
+### Push to Heroku
+
+Check image name
+
+```
+$ sudo docker images
+
+~/Documents/Projects/userlevelmodelsflask : sudo docker images                                                                                                        
+REPOSITORY                                      TAG                 IMAGE ID            CREATED             SIZE                                                      
+userlevels_flask                                latest              c6fc1fa1d23d        3 minutes ago       170MB                                                     
+
+```
+
+1.    Login to Heroku
+
+2.    Login to Heroku Container registry with: sudo docker login --username=_ --password=$(heroku auth:token) registry.heroku.com
+
+3.    Create app:
+
+```
+heroku create
+Creating app... done, ⬢ evening-ravine-99954
+https://evening-ravine-99954.herokuapp.com/ | https://git.heroku.com/evening-ravine-99954.git
+```
+
+3.    Tag with:              sudo docker tag userlevels_flask registry.heroku.com/evening-ravine-99954/web
+
+4.    Push to registry with: sudo docker push registry.heroku.com/evening-ravine-99954/web
+
+5.    Release to web with: heroku container:release web
+
+Once we do this, and set up all of the environmental variables, we are going in the right direction.
+
+### Production Error Diagnosis 
+
+#### R10 Error
+
+```
+Error R10 (Boot timeout) -> Web process failed to bind to $PORT within 60 seconds of launch
+```
+
+We actually have to get the Postgres variables from the Postgres deployment itself, not just use dummy values.  This is under the Postgres >> Settings >> Database Credentials
+
+* Host (SQL_HOST)
+* Database (can remain postgres)
+* Database User
+* Database Password
+* Port
+* Endpoint URL
+* ...And anything else needed
+
+#### SQLAlchemy Error
+
+```
+sqlalchemy.exc.NoSuchModuleError: Can't load plugin: sqlalchemy.dialects:postgres
+```
+We notice along our error stream the following message:
+
+```
+/util/deprecations.py
+```
+So it may be that our SQLAlchemy may be depricated.
+
+Looking at our requirements.txt:
+
+```
+Flask==1.1.2
+Flask-SQLAlchemy==2.4.1
+gunicorn==20.0.4
+psycopg2-binary==2.8.6
+click==7.1.2
+Flask-Login==0.5.0
+Flask-WTF==0.14.3
+email-validator==1.1.2
+Flask-Assets==2.0
+cssmin==0.2.0
+jsmin==2.2.2
+WTForms-SQLAlchemy==0.2
+```
+Flask-SQLAlchemy has been updated to 2.5.1, so we can try that.
+
+## Conclusion
+
+### Things I Learned
+
+* Don't go into convoluted SQL Tool deep level configuration if you don't have to, it goes really far in the weeds. Just try to design database relational models in a way that will prevent you from having to do custom configuration.
+* You have to check your own logic on restricting access between pages, which was fairly intuitive previously anyway - but really though, if you don't sepcify certain users can't access certain pages, then you are opening the door for cross-user editing.
+* Using flask-principal rather than creating convoluted new user types is probably desirable. [Flask-principal](https://pythonhosted.org/Flask-Principal/)
+* Should also probably use [flask-security](https://pythonhosted.org/Flask-Security/)
 
 ## Future Work
 

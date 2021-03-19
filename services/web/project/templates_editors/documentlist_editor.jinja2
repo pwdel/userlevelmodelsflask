@@ -12,7 +12,7 @@
 
     <h1>Documents List</h1>
 
-    <p>This is the list of your documents.</p>
+    <p>This is the list of your assigned documents.</p>
 
   <p></p>
 
@@ -28,13 +28,11 @@
 
     <table class="tg" style="undefined;table-layout: fixed; width: 580px">
     <colgroup>
-    <col style="width: 100px">
     <col style="width: 200px">
     <col style="width: 350px">
     </colgroup>
     <thead>
       <tr>
-        <th class="tg-73oq">Editor</th>
         <th class="tg-73oq">Document Name</th>
         <th class="tg-73oq">Document Body</th>
       </tr>
@@ -42,9 +40,8 @@
     <tbody>
     {% for document in documents %}
       <tr>
-        <td class="tg-73oq">{{ editors[loop.index0] }}</td>
         <td class="tg-73oq">
-          <a href="{{ url_for('sponsor_bp.documentedit_sponsor', document_id=document.id) }}">{{ document.document_name }}</a>
+          <a href="{{ url_for('editor_bp.documentedit_editor', document_id=document.id) }}">{{ document.document_name }}</a>
         </td>
         <td class="tg-73oq">{{ document.document_body }}</td>
       </tr>
@@ -55,14 +52,10 @@
 
   <p></p>
 
-  </div>
-    <a href="{{ url_for('sponsor_bp.newdocument_sponsor') }}">Create a New Document</a>
-  </div>
-
   <p></p>
 
   </div>
-    <a href="{{ url_for('sponsor_bp.dashboard_sponsor') }}">Back to Sponsor Dashboard</a>
+    <a href="{{ url_for('editor_bp.dashboard_editor') }}">Back to Editor Dashboard</a>
   </div>
 
 
