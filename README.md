@@ -5623,7 +5623,9 @@ userlevels_flask                                latest              c6fc1fa1d23d
 
 1.    Login to Heroku
 
-2.    Login to Heroku Container registry with: sudo docker login --username=_ --password=$(heroku auth:token) registry.heroku.com
+2.    Login to Heroku Container registry with: 
+
+sudo docker login --username=_ --password=$(heroku auth:token) registry.heroku.com
 
 3.    Create app:
 
@@ -5633,11 +5635,22 @@ Creating app... done, ⬢ evening-ravine-99954
 https://evening-ravine-99954.herokuapp.com/ | https://git.heroku.com/evening-ravine-99954.git
 ```
 
-3.    Tag with:              sudo docker tag userlevels_flask registry.heroku.com/evening-ravine-99954/web
+3.    Tag with:              
 
-4.    Push to registry with: sudo docker push registry.heroku.com/evening-ravine-99954/web
+```
+sudo docker tag userlevels_flask registry.heroku.com/evening-ravine-99954/web
+```
+4.    Push to registry with: 
 
-5.    Release to web with: heroku container:release web
+```
+sudo docker push registry.heroku.com/evening-ravine-99954/web
+```
+
+5.    Release to web with: 
+
+```
+heroku container:release web
+```
 
 Once we do this, and set up all of the environmental variables, we are going in the right direction.
 
@@ -5687,7 +5700,62 @@ cssmin==0.2.0
 jsmin==2.2.2
 WTForms-SQLAlchemy==0.2
 ```
-Flask-SQLAlchemy has been updated to 2.5.1, so we can try that.
+Flask-SQLAlchemy has been updated to 2.5.1, so we can try that.  Updating the version still resulted in the same error.
+
+After some online research, we hve a couple different new hypotheses:
+
+1. Problem in config.py, around the database path.
+
+Our database path given in Heroku is:
+
+```
+postgres://gdsrkgnknuyemx:ebbd981227e0918ab389043f31af7aea0a4fc8f9aab870c5caeb12da351d9358@ec2-54-205-183-19.compute-1.amazonaws.com:5432/dav7sdb2ndvpfm
+```
+* Based upon a [Stackexchange answer](https://stackoverflow.com/questions/62688256/sqlalchemy-exc-nosuchmoduleerror-cant-load-plugin-sqlalchemy-dialectspostgre), our DATABASE_URL should start with, "postgresql://" not "postgres://"
+* However, if we try to change this, we get: "Cannot Overwrite Attachment values for DATABASE_URL"
+
+Basically, in order to re-write it, I had to destroy the database with:
+
+```
+heroku addons:destroy heroku-postgresql -a evening-ravine-99954                                                           
+ ▸    WARNING: Destructive Action                                                                                                                                     
+ ▸    This command will affect the app evening-ravine-99954
+ ▸    To proceed, type evening-ravine-99954 or re-run this command with --confirm evening-ravine-99954
+```
+This did indeed delete the database, but when we attempted to re-create the databse, the DATABASE_URL was forced and reconnected.
+
+Further, if we look at what our codebase in our previous project under config.py, which was successfully deployed, looks like, it shows:
+
+```
+    # Flask-SQLAlchemy
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite://")
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ECHO = False
+```
+Whereas our new setup is:
+
+```
+# Flask-SQLAlchemy
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "postgresql://")
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ECHO = False
+```
+However changing to sqlite:// seemed to do nothing.
+
+Since we can't seeem to change the DATABASE_URL in Heroku, it seems to be a system-level variable, and since we have the following in our settings...
+
+```
+SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "postgresql://")
+```
+The solution is likely to change this DATABASE_URL to be a different address right within the code, for example:
+
+```
+SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL_PROD", "postgresql://")
+```
+
+...and to set the DATABASE_URL_PROD to the proper variable name beginning with postgresql:// rather than postgres://.
+
+That worked!
 
 ## Conclusion
 
