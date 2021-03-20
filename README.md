@@ -5606,7 +5606,7 @@ sqlalchemy.exc.ProgrammingError
 sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column users.username does not exist
 ```
 
-
+This was fixed by adding, "username" column to models (even though we don't use it).  However, the editors still do not show up properly next to the documents, even with our new query.  Perhaps the idea of building one big table which includes document names, and then running a for loop on that object, would be a better idea than doing two seperate for loops on two seperate objects.
 
 #### Adding Links to List and Dashboard
 
@@ -5880,6 +5880,7 @@ Another way to deal with it would be some kind of if statement which detects the
 * Using flask-principal rather than creating convoluted new user types is probably desirable. [Flask-principal](https://pythonhosted.org/Flask-Principal/)
 * Should also probably use [flask-security](https://pythonhosted.org/Flask-Security/)
 * For moving to production, sometimes there may be environmental variable name conflicts, where the new production system might demand that it uses a certain variable name and value, and this could cause problems in running the application.
+* Much like in excel, running two seperate for loops on two completely differently generated tables is a disorganized practice and may result in confusing end results. What is probably more effective is creating one overall, "result" table for a view, and then displaying results from that table, including strings and so-fourth.  There should be more confidence that everything is lining up properly.
 
 ## Future Work
 
