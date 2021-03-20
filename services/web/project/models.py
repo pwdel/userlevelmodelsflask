@@ -26,6 +26,11 @@ class User(db.Model):
         unique=False,
         nullable=False
     )
+    username = db.Column(
+        db.String(100),
+        unique=False,
+        nullable=True
+    )
     user_type = db.Column(
         db.String(40),
         unique=False,

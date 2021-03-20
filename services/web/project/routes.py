@@ -133,7 +133,8 @@ def documentlist_sponsor():
     # get document objects filtered by the current user
     document_objects = db.session.query(Document).join(Retention, Retention.document_id == Document.id).filter(Retention.sponsor_id == user_id)
     # editor per document objects
-    editor_perdocument_objects = db.session.query(User).join(Retention, Retention.editor_id == User.id).filter(Retention.sponsor_id == user_id)
+    editor_perdocument_objects=db.session.query(Retention.sponsor_id,User.name,Retention.editor_id,Retention.document_id).join(Retention, User.id==Retention.editor_id).filter(Retention.sponsor_id==user_id)
+
     # get a count of the document objects
     document_count = document_objects.count()
     editorobjects_count = editor_perdocument_objects.count()
