@@ -5608,6 +5608,237 @@ sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column users.
 
 This was fixed by adding, "username" column to models (even though we don't use it).  However, the editors still do not show up properly next to the documents, even with our new query.  Perhaps the idea of building one big table which includes document names, and then running a for loop on that object, would be a better idea than doing two seperate for loops on two seperate objects.
 
+#### Creating an Overall SQL Call To Mimic Our Desired View
+
+Firstly we must ask the question, what kind of table do we want to end up with?
+
+The columns of the final table should look like this:
+
+| Sponsor | Editor | Document Name | Document Body |
+
+
+We can start with:
+
+```
+# SELECT retentions.sponsor_id,users.id,retentions.editor_id,retentions.document_id FROM retentions JOIN users ON users.id=retentions.editor_id;  
+```
+
+and modify it to:
+
+```
+# SELECT retentions.sponsor_id,users.id,retentions.editor_id,retentions.document_id,users.name,documents.document_name,documents.document_body FROM retentions JOIN users ON users.id=retentions.editor_id JOIN documents ON documents.id=retentions.document_id;  
+```
+This query spits out the type of result that is more consistent and includes the results we are looking for, with:
+
+ sponsor_id | id | editor_id | document_id |      name      | document_name | document_body                        
+------------+----+-----------+-------------+----------------+---------------+---------------                       
+          1 |  2 |         2 |           1 | Johnny Editor  | Apple         | Red                                  
+          1 |  2 |         2 |           2 | Johnny Editor  | Bannana       | Yellow                               
+          1 |  3 |         3 |           3 | Rocky Editface | Orange        | Orange                               
+          1 |  3 |         3 |           4 | Rocky Editface | Grape         | Purple                               
+          1 |  2 |         2 |           5 | Johnny Editor  | Salad         | Green                                
+
+So from there, translating it into an SQLAlchemy Query...our original query was:
+
+```
+q=db.session.query(Retention.sponsor_id,User.id,Retention.editor_id,Retention.document_id).join(Retention, User.id==Retention.editor_id)
+```
+
+Modifying to mimic our larger table query, we added a join of the documents table setting the document id's together:
+
+```
+q=db.session.query(Retention.sponsor_id,User.id,Retention.editor_id,Retention.document_id).join(Retention, User.id==Retention.editor_id).join(Document, Document.id==Retention.document_id)
+```
+
+Then we pull out the desired information into the query:
+
+```
+q=db.session.query(Retention.sponsor_id,User.id,Retention.editor_id,Retention.document_id,User.name,Document.document_name,Document.document_body).join(Retention, User.id==Retention.editor_id).join(Document, Document.id==Retention.document_id)
+```
+Looking at the results to ensure our query looks good:
+
+```
+>>> q[0].document_name                                                                                             
+'Apple'                                                                                                            
+>>> q[0].name                                                                                                      
+'Johnny Editor' 
+>>> q[1].document_name                                                                                             
+'Bannana'                                                                                                          
+>>> q[1].name                                                                                                      
+'Johnny Editor'                                                                                                    
+>>> q[2].document_name                                                                                             
+'Orange'                                                                                                           
+>>> q[2].name                                                                                                      
+'Rocky Editface'                                                                                                   
+>>> q[3].document_name                                                                                           
+'Grape'                                                                                                            
+>>> q[3].name                                                                                                      
+'Rocky Editface'                                                                                                   
+>>> q[4].document_name                                                                                            
+'Salad'                                                                                                            
+>>> q[4].name                                                                                            
+'Johnny Editor' 
+
+```
+This lines up perfectly with what we expect to see on the view.  That being said, we have to be able to filter this for a defined sponsor_user id, assuming we have multiple sponsors.  
+
+```
+>>> user_id=1                                                                                                      
+>>> q=db.session.query(Retention.sponsor_id,User.id,Retention.editor_id,Retention.document_id,User.name,Document.document_name,Document.document_body).join(Retention, User.id==Retention.editor_id).join(Document, Document.id==Retention.document_id).filter(Retention.sponsor_id == user_id) 
+
+>>> q.count()                                                                                                      
+5  
+```
+...Which is the expected result for user_id set staticly to 1, vs. 9 total documents.  So going back into the route, we can change our overal query and consolidate our code, which was originally:
+
+```
+    # Document objects and list, as well as Editor objects and list
+    # this logic will only work if document_objects.count() = editor_objects.count()
+    # get document objects filtered by the current user
+    document_objects = db.session.query(Document).join(Retention, Retention.document_id == Document.id).filter(Retention.sponsor_id == user_id)
+    # editor per document objects
+    editor_perdocument_objects=db.session.query(Retention.sponsor_id,User.name,Retention.editor_id,Retention.document_id).join(Retention, User.id==Retention.editor_id).filter(Retention.sponsor_id==user_id)
+
+    # get a count of the document objects
+    document_count = document_objects.count()
+    editorobjects_count = editor_perdocument_objects.count()
+    # blank list to append to for documents and editors
+    document_list=[]
+    editor_name_list=[]
+    # loop through document objects
+    for counter in range(0,document_count):
+        document_list.append(document_objects[counter])
+        editor_name_list.append(editor_perdocument_objects[counter].name)
+
+    # show list of document names
+    documents = document_list
+
+    # Editor objects and list
+    # get editor objects filtered by the 
+    editors = editor_name_list
+
+
+    return render_template(
+        'documentlist_sponsor.jinja2',
+        documents=documents,
+        editors=editors
+    )
+
+```
+The finalized route code is slimmed down considerably, with only one query to the database:
+
+```
+def documentlist_sponsor():
+    """Logged-in Sponsor List of Documents."""
+    # get the current user id
+    user_id = current_user.id
+    
+    # Document objects list which includes editors for all objects
+    # this logic will only work if document_objects.count() = editor_objects.count()
+    # get document objects filtered by the current user
+    document_objects=db.session.query(Retention.sponsor_id,User.id,Retention.editor_id,Retention.document_id,User.name,Document.document_name,Document.document_body).join(Retention, User.id==Retention.editor_id).join(Document, Document.id==Retention.document_id).filter(Retention.sponsor_id == user_id) 
+
+    # get a count of the document objects
+    document_count = document_objects.count()
+    
+    # blank list to append to for documents and editors
+    document_list=[]
+
+    # loop through document objects
+    for counter in range(0,document_count):
+        document_list.append(document_objects[counter])
+
+    # show list of document names
+    documents = document_list
+
+    return render_template(
+        'documentlist_sponsor.jinja2',
+        documents=documents,
+    )
+
+```
+We then modify the view from:
+
+```
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="tg-73oq">Editor</th>
+        <th class="tg-73oq">Document Name</th>
+        <th class="tg-73oq">Document Body</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for document in documents %}
+      <tr>
+        <td class="tg-73oq">{{ editors[loop.index0] }}</td>
+        <td class="tg-73oq">
+          <a href="{{ url_for('sponsor_bp.documentedit_sponsor', document_id=document.id) }}">{{ document.document_name }}</a>
+        </td>
+        <td class="tg-73oq">{{ document.document_body }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    </table>
+
+```
+to:
+
+```
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="tg-73oq">Editor</th>
+        <th class="tg-73oq">Document Name</th>
+        <th class="tg-73oq">Document Body</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for document in documents %}
+      <tr>
+        <td class="tg-73oq">{{ document.name }}</td>
+        <td class="tg-73oq">
+          <a href="{{ url_for('sponsor_bp.documentedit_sponsor', document_id=document.document_id) }}">{{ document.document_name }}</a>
+        </td>
+        <td class="tg-73oq">{{ document.document_body }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    </table>
+
+```
+
+Given the way our new table is structured, we had to change:
+
+* document_id=document.document_id, because document.id now maps to User.id
+
+"<td class="tg-73oq">{{ document.name }}</td>" seems counterintuitive because it seems that we are drawing out the document name, but we are really calling the username.
+
+After implementing the above changes, We have a problem where one documents is showing up twice sequentially (document_id=3) but it is skipping (document=2).  This may have been a problem with the view's logic.  Part of this might be the order in which the documents are appearing on the SQL query, which is as follows:
+
+```
+ sponsor_id | id | editor_id | document_id |       name        | document_name | document_body                     
+------------+----+-----------+-------------+-------------------+---------------+---------------                    
+          3 |  1 |         1 |           1 | Editor Edintarion | Apple         | Red                               
+          3 |  1 |         1 |           3 | Editor Edintarion | Cabbage       | Green                             
+          3 |  2 |         2 |           4 | Johnny Editor     | Grape         | Purple                            
+          3 |  1 |         1 |           5 | Editor Edintarion | Bannana       | Yellow                            
+          4 |  2 |         2 |           6 | Johnny Editor     | Car           | Vroom                             
+          3 |  2 |         2 |           2 | Johnny Editor     | Carrot        | Orange                            
+(6 rows)                                                                                                           
+```
+Basically since "Carrot" shows up after "Car," it does not seem to show up on the list.  This probablem can likely be mitigated by an, "order_by" subfunction on the .query function.
+
+```
+document_objects=db.session.query(Retention.sponsor_id,User.id,Retention.editor_id,Retention.document_id,User.name,Document.document_name,Document.document_body).\
+join(Retention, User.id==Retention.editor_id).\
+join(Document, Document.id==Retention.document_id).\
+order_by(Retention.sponsor_id).\
+filter(Retention.sponsor_id == user_id) 
+
+```
+After this change, the problem appears to have been resolved. There was a temporary problem with a double entry after the fix, but after re-starting the database and app, everything appears to show up in order and that may have been something dealing with the legacy database or query.
+
 #### Adding Links to List and Dashboard
 
 * On documentlist - create a link to, "createnewdocument" - Done
