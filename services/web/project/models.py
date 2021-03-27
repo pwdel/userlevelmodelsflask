@@ -103,32 +103,8 @@ class User(db.Model):
         """Check hashed password."""
         return check_password_hash(self.password, password)
 
-    """Sponsor vs. Editor Role Functions"""
-    def sponsor_required(f):
-        @wraps(f)
-        def wrap(*args, **kwargs):
-            if current_user.role == 'Sponsor':
-                return f(*args, **kwargs)
-            else:
-                flash("You need to be a Sponsor to view this page.")
-                return redirect(url_for('index'))
-
-        return wrap
-
-    def editor_required(f):
-        @wraps(f)
-        def wrap(*args, **kwargs):
-            if current_user.role == 'Editor':
-                return f(*args, **kwargs)
-            else:
-                flash("You need to be an Editor to view this page.")
-                return redirect(url_for('index'))
-
-        return wrap
-
     def __repr__(self):
         return '<User {}>'.format(self.username)
-
 
 """Document Object"""
 class Document(db.Model):
