@@ -26,11 +26,6 @@ class User(db.Model):
         unique=False,
         nullable=False
     )
-    username = db.Column(
-        db.String(100),
-        unique=False,
-        nullable=True
-    )
     user_type = db.Column(
         db.String(40),
         unique=False,
@@ -102,9 +97,6 @@ class User(db.Model):
     def check_password(self, password):
         """Check hashed password."""
         return check_password_hash(self.password, password)
-
-    def __repr__(self):
-        return '<User {}>'.format(self.username)
 
 """Document Object"""
 class Document(db.Model):
