@@ -98,7 +98,6 @@ class User(db.Model):
         """Check hashed password."""
         return check_password_hash(self.password, password)
 
-
 """Document Object"""
 class Document(db.Model):
     """Document model."""
