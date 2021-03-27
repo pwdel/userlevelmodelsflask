@@ -6100,7 +6100,122 @@ SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "postgresql://")
 
 And then switch back again to DATABASE_URL_PROD before pushing to Heroku one more time.  This is of course annoying.  One solution for that would be to create a /heroku branch off of the working development branch, or perhaps off of main, which contains a dummy environmental variable that doesn't work for either environment, and then a /dev and /heroku branch which has the proper env variable for their respective environments.
 
-Another way to deal with it would be some kind of if statement which detects the environment automatically first, however this is 
+Another way to deal with it would be some kind of if statement which detects the environment automatically first, however this is complicated for now.
+
+### Putting Into Production Again After Fixing /sponsor/documents List View
+
+After we put things into production for a second time after fixing the Document per user list view, we got the following error:
+
+```
+021-03-26T19:49:50.134958+00:00 app[web.1]: [SQL: SELECT users.id AS users_id, users.name AS users_name, users.username AS users_username, users.user_type AS users_user_type, users.email AS users_email, users.password AS users_password, users.organization AS users_organization, users.created_on AS users_created_on, users.last_login AS users_last_login 
+
+2021-03-26T19:49:50.134959+00:00 app[web.1]: FROM users 
+
+2021-03-26T19:49:50.134959+00:00 app[web.1]: WHERE users.id = %(pk_1)s]
+
+2021-03-26T19:49:50.134959+00:00 app[web.1]: [parameters: {'pk_1': '2'}]
+
+2021-03-26T19:49:50.134960+00:00 app[web.1]: (Background on this error at: http://sqlalche.me/e/14/f405)
+
+2021-03-26T20:25:25.609777+00:00 heroku[web.1]: Idling
+
+2021-03-26T20:25:25.625269+00:00 heroku[web.1]: State changed from up to down
+
+2021-03-26T20:25:27.145873+00:00 heroku[web.1]: Stopping all processes with SIGTERM
+
+2021-03-26T20:25:27.371509+00:00 heroku[web.1]: Process exited with status 143
+```
+Above we had added, "username" to our "User" class in order to fix another error we were having.  This might have been to compensate for something we introduced, "username" rather than something inherent in the program.
+
+We had created a couple different functions:
+
+```
+    """Sponsor vs. Editor Role Functions"""
+    def sponsor_required(f):
+        @wraps(f)
+        def wrap(*args, **kwargs):
+            if current_user.role == 'Sponsor':
+                return f(*args, **kwargs)
+            else:
+                flash("You need to be a Sponsor to view this page.")
+                return redirect(url_for('index'))
+
+        return wrap
+
+    def editor_required(f):
+        @wraps(f)
+        def wrap(*args, **kwargs):
+            if current_user.role == 'Editor':
+                return f(*args, **kwargs)
+            else:
+                flash("You need to be an Editor to view this page.")
+                return redirect(url_for('index'))
+
+        return wrap
+
+    def __repr__(self):
+        return '<User {}>'.format(self.username)
+```
+
+What does the, '<User {}>'.format(self.username) do?
+
+##### Cleaning Up Code on Local Machine Relating to, "username"
+
+
+If we delete the def __repr__(self): that we called out above, as well as the decorator functions we get a fully functional app, without any errors from SQLAlchemy.
+
+So, it is possible that we had an error previously because the __repr__(self) function was being checked within the user model by SQLAlchemy which was looking to make sure we had, "username" which was not necessary.  I also removed:
+
+```
+    username = db.Column(
+        db.String(100),
+        unique=False,
+        nullable=True
+    )
+```
+
+From the User schema, after which it is removed, everything still seems to build and work fine.
+
+The "__repr__(self):" function is defined by the designer of a type, in order to provide a means for users of the type to represent values of that type unambiguously, with a string.  So this is likely needed.  However, we don't have a username, so maybe not.
+
+#### Returning to Diagnosing the Deployment
+
+The first thing we can try is actually to delete the database, and then re-run or re-start the app in exactly the same form.  There may have been a legacy problem with the database.  If we destroy the database and then start again, we can see if this resolves the issue.
+
+We destroy the database and then get the following SQLAlchemy Error at https://docs.sqlalchemy.org/en/14/errors.html#error-f405, which says:
+
+> ProgrammingError
+> Exception raised for programming errors, e.g. table not found or already exists, syntax error in the SQL statement, wrong number of parameters specified, etc.
+> This error is a DBAPI Error and originates from the database driver (DBAPI), not SQLAlchemy itself.
+> The ProgrammingError is sometimes raised by drivers in the context of the database connection being dropped, or not being able to connect to the database. For tips on how to deal with this, see the section Dealing with Disconnects.
+
+If we delete the database, we still get the above error, however this could be because we have not re-set the environmental variables.
+
+After replacing our environmental variables we get:
+
+```
+sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) FATAL:  role "egaepatncgvcbk" is not permitted to log in
+
+2021-03-27T00:22:36.798903+00:00 app[web.1]: 
+```
+So, we likely have to release the code again to re-build the database and everything at start.
+
+Rebuilding everything from the start...we get a different error, which we have seen previously:
+
+```
+sqlalchemy.exc.NoSuchModuleError: Can't load plugin: sqlalchemy.dialects:postgres
+```
+
+#### Returning to Diagnosing the Deployment - Dialects
+
+As had been diagnosed earlier in this readme file, we had to change "postgres://" to "postgresql://" at the start of the DATABASE_URL_PROD variable.
+
+```
+postgresql://adsfadsfdsf...etc
+
+```
+
+After this was completed, absolutely everything worked in production.
 
 ## Conclusion
 
